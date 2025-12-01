@@ -83,6 +83,7 @@ const mockProperties: Property[] = [
         cost: 150,
       },
     ],
+    ownership: "100% ownership",
     },
     {
       id: "2",
@@ -108,6 +109,7 @@ const mockProperties: Property[] = [
       },
     ],
     workRequests: [],
+    ownership: "50% partner",
   },
   {
     id: "3",
@@ -132,6 +134,7 @@ const mockProperties: Property[] = [
         cost: 800,
       },
     ],
+    ownership: "100% ownership",
   },
 ]
 
@@ -354,6 +357,18 @@ export default function PropertiesPage() {
           }
         } else if (field === "address" || field === "type" || field === "mortgageHolder") {
           ;(updated as any)[field] = editValue
+        } else if (field === "ownership") {
+          const validOwnership = [
+            "100% ownership",
+            "50% partner",
+            "25% partner",
+            "75% partner",
+            "33% partner",
+            "67% partner",
+          ].includes(editValue)
+            ? editValue
+            : "100% ownership"
+          ;(updated as any)[field] = validOwnership
         }
         
         return updated
@@ -911,6 +926,7 @@ export default function PropertiesPage() {
                   <ArrowUpDown className="h-4 w-4" />
                 </div>
               </TableHead>
+              <TableHead>Partners</TableHead>
               <TableHead
                 className="cursor-pointer hover:bg-muted/50 text-right"
                 onClick={() => handleSort("currentEstValue")}
@@ -1012,6 +1028,57 @@ export default function PropertiesPage() {
                       </Badge>
                     )}
                   </TableCell>
+                  <TableCell>
+                    {editingCell?.propertyId === property.id && editingCell?.field === "ownership" ? (
+                      <div className="flex items-center gap-1">
+                        <Select
+                          value={editValue || "100% ownership"}
+                          onValueChange={setEditValue}
+                          onOpenChange={(open) => {
+                            if (!open) {
+                              handleCellSave()
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-40" id={`edit-${property.id}-ownership`} name={`edit-${property.id}-ownership`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="100% ownership">100% ownership</SelectItem>
+                            <SelectItem value="50% partner">50% partner</SelectItem>
+                            <SelectItem value="25% partner">25% partner</SelectItem>
+                            <SelectItem value="75% partner">75% partner</SelectItem>
+                            <SelectItem value="33% partner">33% partner</SelectItem>
+                            <SelectItem value="67% partner">67% partner</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCellSave}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCellCancel}
+                          className="h-8 w-8 p-0"
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span
+                        className="cursor-pointer hover:bg-muted/50 rounded px-1 transition-colors"
+                        onClick={() => handleCellClick(property.id, "ownership", property.ownership || "100% ownership", property.ownership || "100% ownership")}
+                        title="Click to edit"
+                      >
+                        {property.ownership || "100% ownership"}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     {renderEditableCell(
                       property.id,
@@ -1090,7 +1157,7 @@ export default function PropertiesPage() {
           </TableBody>
           <TableFooter>
             <TableRow className="font-bold bg-muted/50">
-              <TableCell colSpan={2}>Portfolio Totals</TableCell>
+              <TableCell colSpan={3}>Portfolio Totals</TableCell>
               <TableCell className="text-right">
                 {portfolioTotals.totalProperties} Properties
               </TableCell>

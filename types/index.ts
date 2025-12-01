@@ -70,6 +70,8 @@ export interface Property {
   rentRoll?: RentRollUnit[]
   workRequests?: WorkRequest[]
   linkedWebsites?: string[]
+  // Partnership/Ownership
+  ownership?: "100% ownership" | "50% partner" | "25% partner" | "75% partner" | "33% partner" | "67% partner"
 }
 
 export interface Client {
