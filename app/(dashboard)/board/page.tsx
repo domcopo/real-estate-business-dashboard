@@ -164,6 +164,7 @@ export default function FlexboardPage() {
         clearTimeout(saveTimeoutRef.current)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blops, user, loading])
 
   const addBlop = () => {
