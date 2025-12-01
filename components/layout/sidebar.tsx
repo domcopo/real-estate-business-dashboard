@@ -56,7 +56,7 @@ interface SidebarProps {
   onOpen?: () => void
 }
 
-export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps = {}) {
+export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useUser()
   const { userMemberships, setActive, isLoaded } = useOrganizationList()
@@ -188,7 +188,8 @@ export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps = {}) 
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
