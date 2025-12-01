@@ -432,23 +432,36 @@ export default function PropertiesPage() {
 
   const handleSaveProperties = async () => {
     try {
+      // Filter out any properties that are missing required fields
+      const validProperties = properties.filter((prop: Property) => {
+        return prop.address && prop.type && prop.status
+      })
+
+      if (validProperties.length === 0) {
+        throw new Error('No valid properties to save. Please ensure all properties have address, type, and status.')
+      }
+
+      console.log('Saving properties:', validProperties.length)
+
       const response = await fetch('/api/properties', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          properties: properties,
+          properties: validProperties,
           workspaceId: null,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log('Properties saved successfully:', data)
         return // Success - SaveButton will show success state
       } else {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to save properties')
+        const errorData = await response.json()
+        console.error('Save failed:', errorData)
+        throw new Error(errorData.details || errorData.error || 'Failed to save properties')
       }
     } catch (error: any) {
       console.error('Error saving properties:', error)

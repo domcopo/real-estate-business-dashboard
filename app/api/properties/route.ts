@@ -74,8 +74,17 @@ export async function POST(request: NextRequest) {
     const { properties, workspaceId } = body
 
     if (!Array.isArray(properties)) {
+      console.error('Invalid request: properties is not an array', { properties })
       return NextResponse.json(
         { error: 'Invalid request: properties must be an array' },
+        { status: 400 }
+      )
+    }
+
+    if (properties.length === 0) {
+      console.warn('Empty properties array received')
+      return NextResponse.json(
+        { error: 'No properties to save' },
         { status: 400 }
       )
     }
@@ -92,23 +101,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert new properties
-    const propertiesToInsert = properties.map((prop: any) => ({
-      user_id: userId,
-      workspace_id: workspaceId || null,
-      address: prop.address,
-      type: prop.type,
-      status: prop.status,
-      mortgage_holder: prop.mortgageHolder || null,
-      purchase_price: prop.purchasePrice || 0,
-      current_est_value: prop.currentEstValue || 0,
-      monthly_mortgage_payment: prop.monthlyMortgagePayment || 0,
-      monthly_insurance: prop.monthlyInsurance || 0,
-      monthly_property_tax: prop.monthlyPropertyTax || 0,
-      monthly_other_costs: prop.monthlyOtherCosts || 0,
-      monthly_gross_rent: prop.monthlyGrossRent || 0,
-      ownership: prop.ownership || null,
-      linked_websites: prop.linkedWebsites || null,
-    }))
+    const propertiesToInsert = properties.map((prop: any) => {
+      // Validate required fields
+      if (!prop.address || !prop.type || !prop.status) {
+        throw new Error(`Property missing required fields: address, type, or status`)
+      }
+
+      return {
+        user_id: userId,
+        workspace_id: workspaceId || null,
+        address: String(prop.address).trim(),
+        type: String(prop.type).trim(),
+        status: String(prop.status).trim(),
+        mortgage_holder: prop.mortgageHolder ? String(prop.mortgageHolder).trim() : null,
+        purchase_price: Number(prop.purchasePrice) || 0,
+        current_est_value: Number(prop.currentEstValue) || 0,
+        monthly_mortgage_payment: Number(prop.monthlyMortgagePayment) || 0,
+        monthly_insurance: Number(prop.monthlyInsurance) || 0,
+        monthly_property_tax: Number(prop.monthlyPropertyTax) || 0,
+        monthly_other_costs: Number(prop.monthlyOtherCosts) || 0,
+        monthly_gross_rent: Number(prop.monthlyGrossRent) || 0,
+        ownership: prop.ownership ? String(prop.ownership).trim() : null,
+        linked_websites: Array.isArray(prop.linkedWebsites) ? prop.linkedWebsites : null,
+      }
+    })
+
+    if (propertiesToInsert.length === 0) {
+      return NextResponse.json(
+        { error: 'No properties to save' },
+        { status: 400 }
+      )
+    }
 
     const { data, error: insertError } = await supabaseAdmin
       .from('properties')
@@ -117,6 +140,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('Error inserting properties:', insertError)
+      console.error('Properties attempted:', JSON.stringify(propertiesToInsert, null, 2))
       return NextResponse.json(
         { error: 'Failed to save properties', details: insertError.message },
         { status: 500 }
