@@ -149,16 +149,16 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   const calculateMonthlyCosts = (): number => {
     if (!propertyData) return 0
     return (
-      safePropertyData.monthlyMortgagePayment +
-      safePropertyData.monthlyInsurance +
-      safePropertyData.monthlyPropertyTax +
-      safePropertyData.monthlyOtherCosts
+      propertyData.monthlyMortgagePayment +
+      propertyData.monthlyInsurance +
+      propertyData.monthlyPropertyTax +
+      propertyData.monthlyOtherCosts
     )
   }
 
   const calculateMonthlyCashflow = (): number => {
     if (!propertyData) return 0
-    return safePropertyData.monthlyGrossRent - calculateMonthlyCosts()
+    return propertyData.monthlyGrossRent - calculateMonthlyCosts()
   }
 
   const calculateAnnualCashflow = (): number => {
@@ -166,14 +166,14 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   }
 
   const calculateCapRate = (): number => {
-    if (!propertyData || safePropertyData.currentEstValue === 0) return 0
+    if (!propertyData || propertyData.currentEstValue === 0) return 0
     const netOperatingIncome = calculateAnnualCashflow()
-    return (netOperatingIncome / safePropertyData.currentEstValue) * 100
+    return (netOperatingIncome / propertyData.currentEstValue) * 100
   }
 
   const calculateCashOnCashReturn = (): number => {
     if (!propertyData) return 0
-    const downPayment = safePropertyData.purchasePrice * 0.2 // Assuming 20% down
+    const downPayment = propertyData.purchasePrice * 0.2 // Assuming 20% down
     if (downPayment === 0) return 0
     const annualCashflow = calculateAnnualCashflow()
     return (annualCashflow / downPayment) * 100
@@ -197,6 +197,49 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
       if (!prev) return null
       return { ...prev, [field]: value }
     })
+  }
+
+  const handleSaveProperty = async () => {
+    if (!propertyData || !propertyId) {
+      throw new Error('Property data or ID missing')
+    }
+
+    try {
+      // Save main property data
+      const response = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: propertyData.address,
+          type: propertyData.type,
+          status: propertyData.status,
+          mortgageHolder: propertyData.mortgageHolder,
+          purchasePrice: propertyData.purchasePrice,
+          currentEstValue: propertyData.currentEstValue,
+          monthlyMortgagePayment: propertyData.monthlyMortgagePayment,
+          monthlyInsurance: propertyData.monthlyInsurance,
+          monthlyPropertyTax: propertyData.monthlyPropertyTax,
+          monthlyOtherCosts: propertyData.monthlyOtherCosts,
+          monthlyGrossRent: propertyData.monthlyGrossRent,
+          ownership: propertyData.ownership,
+          linkedWebsites: propertyData.linkedWebsites,
+        }),
+      })
+
+      if (response.ok) {
+        // TODO: Save rent roll units and work requests separately
+        // For now, just save the main property
+        return // Success - SaveButton will show success state
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save property')
+      }
+    } catch (error: any) {
+      console.error('Error saving property:', error)
+      throw error // Re-throw so SaveButton can handle it
+    }
   }
 
   const handleAddUnit = () => {
