@@ -139,6 +139,8 @@ export default function PropertiesPage() {
   const [csvData, setCsvData] = useState<string[][]>([])
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({})
+  const [importError, setImportError] = useState<string>("")
+  const [importSuccess, setImportSuccess] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Calculate monthly total costs
@@ -343,145 +345,314 @@ export default function PropertiesPage() {
     document.body.removeChild(link)
   }
 
+  const downloadSampleCSV = () => {
+    const sampleHeaders = [
+      "Address",
+      "Type",
+      "Status",
+      "Mortgage Holder",
+      "Purchase Price",
+      "Current Est. Value",
+      "Monthly Mortgage Payment",
+      "Monthly Insurance",
+      "Monthly Property Tax",
+      "Monthly Other Costs",
+      "Monthly Gross Rent",
+    ]
+    
+    const sampleData = [
+      [
+        "123 Sample St, City, State",
+        "House",
+        "rented",
+        "Sample Bank",
+        "500000",
+        "550000",
+        "2500",
+        "150",
+        "600",
+        "200",
+        "3500",
+      ],
+    ]
+
+    const csvContent = [sampleHeaders, ...sampleData]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", "sample_properties_import.csv")
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   // Import functions
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
+    // Reset errors
+    setImportError("")
+    setImportSuccess("")
+
+    // Validate file type
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+      setImportError("Please upload a CSV or TXT file")
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (e) => {
-      const text = e.target?.result as string
-      parseCSV(text)
+      try {
+        const text = e.target?.result as string
+        if (!text || text.trim().length === 0) {
+          setImportError("File is empty")
+          return
+        }
+        parseCSV(text)
+      } catch (error) {
+        setImportError(`Error reading file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+    reader.onerror = () => {
+      setImportError("Error reading file. Please try again.")
     }
     reader.readAsText(file)
   }
 
   const parseCSV = (text: string) => {
-    const lines = text.split("\n").filter((line) => line.trim())
-    if (lines.length === 0) return
+    try {
+      // Handle different line endings (Windows \r\n, Mac \r, Unix \n)
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const lines = normalizedText.split("\n").filter((line) => line.trim().length > 0)
+      
+      if (lines.length === 0) {
+        setImportError("CSV file appears to be empty")
+        return
+      }
 
-    const parsed = lines.map((line) => {
-      const result: string[] = []
-      let current = ""
-      let inQuotes = false
+      if (lines.length < 2) {
+        setImportError("CSV file must have at least a header row and one data row")
+        return
+      }
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i]
-        if (char === '"') {
-          inQuotes = !inQuotes
-        } else if (char === "," && !inQuotes) {
-          result.push(current.trim())
-          current = ""
-        } else {
-          current += char
+      const parsed = lines.map((line) => {
+        const result: string[] = []
+        let current = ""
+        let inQuotes = false
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i]
+          const nextChar = i < line.length - 1 ? line[i + 1] : null
+          
+          if (char === '"') {
+            // Handle escaped quotes ("")
+            if (nextChar === '"') {
+              current += '"'
+              i++ // Skip next quote
+            } else {
+              inQuotes = !inQuotes
+            }
+          } else if (char === "," && !inQuotes) {
+            result.push(current.trim())
+            current = ""
+          } else {
+            current += char
+          }
         }
-      }
-      result.push(current.trim())
-      return result
-    })
-
-    const headers = parsed[0].map((h) => h.replace(/^"|"$/g, ""))
-    const data = parsed.slice(1)
-
-    setCsvHeaders(headers)
-    setCsvData(data)
-    
-    // Auto-map fields based on header names
-    const autoMapping: Record<string, string> = {}
-    const propertyFields = [
-      "address",
-      "type",
-      "status",
-      "mortgageHolder",
-      "purchasePrice",
-      "currentEstValue",
-      "monthlyMortgagePayment",
-      "monthlyInsurance",
-      "monthlyPropertyTax",
-      "monthlyOtherCosts",
-      "monthlyGrossRent",
-    ]
-
-    headers.forEach((header) => {
-      const normalizedHeader = header.toLowerCase().replace(/\s+/g, "")
-      const matchedField = propertyFields.find((field) => {
-        const normalizedField = field.replace(/([A-Z])/g, " $1").toLowerCase().trim()
-        return (
-          normalizedHeader.includes(normalizedField) ||
-          normalizedField.includes(normalizedHeader) ||
-          header.toLowerCase().includes(field.toLowerCase())
-        )
+        result.push(current.trim())
+        return result
       })
-      if (matchedField) {
-        autoMapping[header] = matchedField
-      }
-    })
 
-    setFieldMapping(autoMapping)
-    setImportDialogOpen(true)
+      const headers = parsed[0].map((h) => h.replace(/^["']|["']$/g, "").trim())
+      const data = parsed.slice(1).filter((row) => row.some((cell) => cell.trim().length > 0))
+
+      if (headers.length === 0) {
+        setImportError("No headers found in CSV file")
+        return
+      }
+
+      // Check if all rows have the same number of columns
+      const expectedColumns = headers.length
+      const invalidRows = data.filter((row) => row.length !== expectedColumns)
+      if (invalidRows.length > 0) {
+        console.warn(`Warning: ${invalidRows.length} rows have incorrect number of columns`)
+      }
+
+      setCsvHeaders(headers)
+      setCsvData(data)
+      
+      // Auto-map fields based on header names
+      const autoMapping: Record<string, string> = {}
+      const propertyFields = [
+        "address",
+        "type",
+        "status",
+        "mortgageHolder",
+        "purchasePrice",
+        "currentEstValue",
+        "monthlyMortgagePayment",
+        "monthlyInsurance",
+        "monthlyPropertyTax",
+        "monthlyOtherCosts",
+        "monthlyGrossRent",
+      ]
+
+      headers.forEach((header) => {
+        const normalizedHeader = header.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "")
+        const matchedField = propertyFields.find((field) => {
+          const normalizedField = field.replace(/([A-Z])/g, " $1").toLowerCase().trim().replace(/\s+/g, "")
+          const fieldVariations = [
+            normalizedField,
+            field.toLowerCase(),
+            field.replace(/([A-Z])/g, " $1").toLowerCase().trim(),
+          ]
+          
+          return (
+            normalizedHeader === normalizedField ||
+            normalizedHeader.includes(normalizedField) ||
+            normalizedField.includes(normalizedHeader) ||
+            fieldVariations.some(v => normalizedHeader.includes(v) || v.includes(normalizedHeader)) ||
+            header.toLowerCase().includes(field.toLowerCase()) ||
+            field.toLowerCase().includes(header.toLowerCase())
+          )
+        })
+        if (matchedField) {
+          autoMapping[header] = matchedField
+        }
+      })
+
+      setFieldMapping(autoMapping)
+      setImportDialogOpen(true)
+      setImportError("")
+    } catch (error) {
+      setImportError(`Error parsing CSV: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const handleImport = () => {
-    const importedProperties: Property[] = csvData.map((row, index) => {
-      const property: Partial<Property> = {
-        id: `imported-${Date.now()}-${index}`,
-        address: "",
-        type: "",
-        status: "vacant",
-        purchasePrice: 0,
-        currentEstValue: 0,
-        monthlyMortgagePayment: 0,
-        monthlyInsurance: 0,
-        monthlyPropertyTax: 0,
-        monthlyOtherCosts: 0,
-        monthlyGrossRent: 0,
-        rentRoll: [],
-        workRequests: [],
+    try {
+      setImportError("")
+      setImportSuccess("")
+
+      // Validate that at least address is mapped
+      const addressMapped = Object.values(fieldMapping).includes("address")
+      if (!addressMapped) {
+        setImportError("Please map at least the 'Address' field to import properties")
+        return
       }
 
-      csvHeaders.forEach((header, colIndex) => {
-        const mappedField = fieldMapping[header]
-        if (mappedField && row[colIndex]) {
-          const value = row[colIndex].replace(/^"|"$/g, "")
-          
-          if (mappedField === "status") {
-            const statusValue = value.toLowerCase()
-            if (["rented", "vacant", "under_maintenance", "sold"].includes(statusValue)) {
-              property[mappedField] = statusValue as Property["status"]
-            }
-          } else if (
-            [
-              "purchasePrice",
-              "currentEstValue",
-              "monthlyMortgagePayment",
-              "monthlyInsurance",
-              "monthlyPropertyTax",
-              "monthlyOtherCosts",
-              "monthlyGrossRent",
-            ].includes(mappedField)
-          ) {
-            const numValue = parseFloat(value.replace(/[^0-9.-]/g, ""))
-            if (!isNaN(numValue)) {
-              property[mappedField as keyof Property] = numValue as any
-            }
-          } else {
-            property[mappedField as keyof Property] = value as any
-          }
+      const importedProperties: Property[] = []
+      const errors: string[] = []
+
+      csvData.forEach((row, index) => {
+        const property: Partial<Property> = {
+          id: `imported-${Date.now()}-${index}`,
+          address: "",
+          type: "",
+          status: "vacant",
+          purchasePrice: 0,
+          currentEstValue: 0,
+          monthlyMortgagePayment: 0,
+          monthlyInsurance: 0,
+          monthlyPropertyTax: 0,
+          monthlyOtherCosts: 0,
+          monthlyGrossRent: 0,
+          rentRoll: [],
+          workRequests: [],
         }
+
+        csvHeaders.forEach((header, colIndex) => {
+          const mappedField = fieldMapping[header]
+          if (mappedField && mappedField !== "" && row[colIndex] !== undefined) {
+            let value = row[colIndex]?.replace(/^["']|["']$/g, "").trim() || ""
+            
+            if (!value) return // Skip empty values
+            
+            if (mappedField === "status") {
+              const statusValue = value.toLowerCase().trim()
+              // More flexible status matching
+              const statusMap: Record<string, Property["status"]> = {
+                "rented": "rented",
+                "rent": "rented",
+                "occupied": "rented",
+                "vacant": "vacant",
+                "vacancy": "vacant",
+                "empty": "vacant",
+                "under_maintenance": "under_maintenance",
+                "maintenance": "under_maintenance",
+                "repair": "under_maintenance",
+                "sold": "sold",
+                "sale": "sold",
+              }
+              property[mappedField] = statusMap[statusValue] || "vacant"
+            } else if (
+              [
+                "purchasePrice",
+                "currentEstValue",
+                "monthlyMortgagePayment",
+                "monthlyInsurance",
+                "monthlyPropertyTax",
+                "monthlyOtherCosts",
+                "monthlyGrossRent",
+              ].includes(mappedField)
+            ) {
+              // Remove currency symbols, commas, and whitespace
+              const cleanedValue = value.replace(/[$,\s]/g, "")
+              const numValue = parseFloat(cleanedValue)
+              if (!isNaN(numValue) && isFinite(numValue)) {
+                property[mappedField as keyof Property] = numValue as any
+              } else {
+                errors.push(`Row ${index + 1}: Invalid number for ${mappedField}: "${value}"`)
+              }
+            } else {
+              property[mappedField as keyof Property] = value as any
+            }
+          }
+        })
+
+        // Validate required fields
+        if (!property.address || property.address.trim() === "") {
+          errors.push(`Row ${index + 1}: Missing required field 'address'`)
+          return
+        }
+
+        importedProperties.push(property as Property)
       })
 
-      return property as Property
-    })
+      if (errors.length > 0 && importedProperties.length === 0) {
+        setImportError(`Import failed:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n... and ${errors.length - 5} more errors` : ""}`)
+        return
+      }
 
-    setProperties([...properties, ...importedProperties])
-    setImportDialogOpen(false)
-    setCsvData([])
-    setCsvHeaders([])
-    setFieldMapping({})
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+      if (importedProperties.length === 0) {
+        setImportError("No valid properties found to import. Please check your CSV data and field mapping.")
+        return
+      }
+
+      setProperties([...properties, ...importedProperties])
+      setImportSuccess(`Successfully imported ${importedProperties.length} properties!${errors.length > 0 ? ` (${errors.length} warnings)` : ""}`)
+      
+      // Clear form after a delay
+      setTimeout(() => {
+        setImportDialogOpen(false)
+        setCsvData([])
+        setCsvHeaders([])
+        setFieldMapping({})
+        setImportError("")
+        setImportSuccess("")
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
+      }, 2000)
+    } catch (error) {
+      setImportError(`Import error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-    alert(`Successfully imported ${importedProperties.length} properties!`)
   }
 
   const propertyFields = [
@@ -731,37 +902,75 @@ export default function PropertiesPage() {
             <DialogTitle>Import Properties from CSV</DialogTitle>
             <DialogDescription>
               Map CSV columns to property fields. You can preview the first few rows below.
+              <Button
+                variant="link"
+                className="p-0 h-auto text-primary ml-2"
+                onClick={downloadSampleCSV}
+              >
+                Download sample CSV
+              </Button>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Error Message */}
+            {importError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <p className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap">{importError}</p>
+              </div>
+            )}
+            
+            {/* Success Message */}
+            {importSuccess && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <p className="text-sm text-green-800 dark:text-green-200">{importSuccess}</p>
+              </div>
+            )}
             {/* Field Mapping */}
             <div className="space-y-2">
-              <Label>Field Mapping</Label>
-              <div className="border rounded-lg p-4 space-y-2 max-h-96 overflow-y-auto">
-                {csvHeaders.map((header, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="flex-1 text-sm font-medium">{header}</div>
-                    <div className="text-sm text-muted-foreground">→</div>
-                    <Select
-                      value={fieldMapping[header] || ""}
-                      onValueChange={(value) =>
-                        setFieldMapping({ ...fieldMapping, [header]: value })
-                      }
-                    >
-                      <SelectTrigger className="w-64">
-                        <SelectValue placeholder="Select field..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {propertyFields.map((field) => (
-                          <SelectItem key={field.value} value={field.value}>
-                            {field.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <Label>Field Mapping</Label>
+                <span className="text-xs text-muted-foreground">
+                  {csvHeaders.length} columns detected
+                </span>
               </div>
+              <div className="border rounded-lg p-4 space-y-2 max-h-96 overflow-y-auto">
+                {csvHeaders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No headers detected. Please check your CSV file format.
+                  </p>
+                ) : (
+                  csvHeaders.map((header, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="flex-1 text-sm font-medium truncate" title={header}>
+                        {header}
+                      </div>
+                      <div className="text-sm text-muted-foreground">→</div>
+                      <Select
+                        value={fieldMapping[header] || ""}
+                        onValueChange={(value) =>
+                          setFieldMapping({ ...fieldMapping, [header]: value })
+                        }
+                      >
+                        <SelectTrigger className="w-64">
+                          <SelectValue placeholder="Select field..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {propertyFields.map((field) => (
+                            <SelectItem key={field.value} value={field.value}>
+                              {field.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))
+                )}
+              </div>
+              {!Object.values(fieldMapping).includes("address") && csvHeaders.length > 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Please map at least the "Address" field to import properties
+                </p>
+              )}
             </div>
 
             {/* Preview */}
