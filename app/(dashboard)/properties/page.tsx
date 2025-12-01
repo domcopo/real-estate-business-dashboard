@@ -223,7 +223,7 @@ export default function PropertiesPage() {
       0
     )
     return { totalProperties, totalEstValue, totalMonthlyCashflow }
-  }, [sortedProperties])
+  }, [sortedProperties, calculateMonthlyCashflow])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

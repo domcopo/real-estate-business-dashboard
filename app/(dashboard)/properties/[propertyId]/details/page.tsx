@@ -128,14 +128,26 @@ const mockProperties: Property[] = [
 export default function PropertyDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const propertyId = Array.isArray(params?.propertyId) 
-    ? params.propertyId[0] 
-    : (params?.propertyId as string | undefined)
+  const propertyId = params?.propertyId 
+    ? (Array.isArray(params.propertyId) ? params.propertyId[0] : params.propertyId)
+    : undefined
 
   // Find the property
   const property = propertyId ? mockProperties.find((p) => p.id === propertyId) : undefined
 
-  if (!property) {
+  // State for editable property data - MUST be called before any early returns
+  const [propertyData, setPropertyData] = useState<Property | null>(property || null)
+  const [rentRoll, setRentRoll] = useState<RentRollUnit[]>(
+    property?.rentRoll || []
+  )
+  const [workRequests, setWorkRequests] = useState<WorkRequest[]>(
+    property?.workRequests || []
+  )
+  const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
+  const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
+
+  // Early return after all hooks
+  if (!property || !propertyData) {
     return (
       <div className="p-8">
         <div className="text-center">
@@ -149,17 +161,7 @@ export default function PropertyDetailsPage() {
     )
   }
 
-  // State for editable property data
-  const [propertyData, setPropertyData] = useState<Property>({ ...property })
-  const [rentRoll, setRentRoll] = useState<RentRollUnit[]>(
-    property.rentRoll || []
-  )
-  const [workRequests, setWorkRequests] = useState<WorkRequest[]>(
-    property.workRequests || []
-  )
-  const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
-  const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
-
+  // After the early return, propertyData is guaranteed to be non-null
   // Calculate metrics
   const calculateMonthlyCosts = (): number => {
     return (
