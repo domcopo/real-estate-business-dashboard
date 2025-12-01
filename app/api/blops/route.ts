@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
 /**
@@ -7,7 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase'
  */
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = auth()
+    const user = await currentUser()
+    const userId = user?.id
     
     if (!userId) {
       return NextResponse.json(
@@ -52,7 +53,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = auth()
+    const user = await currentUser()
+    const userId = user?.id
     
     if (!userId) {
       return NextResponse.json(
