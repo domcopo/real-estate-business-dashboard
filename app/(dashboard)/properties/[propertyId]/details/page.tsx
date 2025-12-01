@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -128,10 +128,12 @@ const mockProperties: Property[] = [
 export default function PropertyDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const propertyId = params.propertyId as string
+  const propertyId = Array.isArray(params?.propertyId) 
+    ? params.propertyId[0] 
+    : (params?.propertyId as string | undefined)
 
   // Find the property
-  const property = mockProperties.find((p) => p.id === propertyId)
+  const property = propertyId ? mockProperties.find((p) => p.id === propertyId) : undefined
 
   if (!property) {
     return (
@@ -155,8 +157,6 @@ export default function PropertyDetailsPage() {
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>(
     property.workRequests || []
   )
-  const [isEditingUnit, setIsEditingUnit] = useState<string | null>(null)
-  const [isEditingWorkRequest, setIsEditingWorkRequest] = useState<string | null>(null)
   const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
   const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
 
