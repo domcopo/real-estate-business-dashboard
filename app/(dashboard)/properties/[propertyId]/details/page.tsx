@@ -127,7 +127,8 @@ const mockProperties: Property[] = [
 ]
 
 export default function PropertyDetailsPage({ params }: { params: Promise<{ propertyId: string }> }) {
-  const { propertyId } = use(params)
+  const resolvedParams = use(params)
+  const propertyId = resolvedParams.propertyId
   const router = useRouter()
 
   // Find the property
@@ -205,6 +206,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   // After the early return, propertyData is guaranteed to be non-null
   // Calculate metrics
   const calculateMonthlyCosts = (): number => {
+    if (!propertyData) return 0
     return (
       propertyData.monthlyMortgagePayment +
       propertyData.monthlyInsurance +
@@ -214,6 +216,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   }
 
   const calculateMonthlyCashflow = (): number => {
+    if (!propertyData) return 0
     return propertyData.monthlyGrossRent - calculateMonthlyCosts()
   }
 
@@ -222,12 +225,13 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   }
 
   const calculateCapRate = (): number => {
-    if (propertyData.currentEstValue === 0) return 0
+    if (!propertyData || propertyData.currentEstValue === 0) return 0
     const netOperatingIncome = calculateAnnualCashflow()
     return (netOperatingIncome / propertyData.currentEstValue) * 100
   }
 
   const calculateCashOnCashReturn = (): number => {
+    if (!propertyData) return 0
     const downPayment = propertyData.purchasePrice * 0.2 // Assuming 20% down
     if (downPayment === 0) return 0
     const annualCashflow = calculateAnnualCashflow()
