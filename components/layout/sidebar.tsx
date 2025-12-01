@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
@@ -52,8 +53,10 @@ const navItems: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const { user } = useUser()
-  const { organizationList, setActive } = useOrganizationList()
+  const { userMemberships, setActive, isLoaded } = useOrganizationList()
   const [collapsed, setCollapsed] = useState(false)
+  
+  const organizationList = userMemberships?.data || []
 
   return (
     <div className={cn(
@@ -84,13 +87,13 @@ export function Sidebar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem onClick={() => setActive({ organization: null })}>
+              <DropdownMenuItem onClick={() => setActive?.({ organization: null })}>
                 Personal
               </DropdownMenuItem>
               {organizationList?.map(({ organization }) => (
                 <DropdownMenuItem
                   key={organization.id}
-                  onClick={() => setActive({ organization: organization.id })}
+                  onClick={() => setActive?.({ organization: organization.id })}
                 >
                   {organization.name}
                 </DropdownMenuItem>
@@ -131,7 +134,7 @@ export function Sidebar() {
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
               {user.imageUrl ? (
-                <img src={user.imageUrl} alt={user.fullName || ""} className="h-8 w-8 rounded-full" />
+                <Image src={user.imageUrl} alt={user.fullName || ""} width={32} height={32} className="h-8 w-8 rounded-full" />
               ) : (
                 <span className="text-xs font-medium">
                   {user.firstName?.[0] || user.emailAddresses[0]?.emailAddress[0] || "U"}

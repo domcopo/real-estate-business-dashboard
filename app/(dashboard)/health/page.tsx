@@ -31,7 +31,7 @@ export default function HealthPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Today's Tasks</CardTitle>
+              <CardTitle>Today&apos;s Tasks</CardTitle>
               <Button variant="ghost" size="icon">
                 <Plus className="h-4 w-4" />
               </Button>
