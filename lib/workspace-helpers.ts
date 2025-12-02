@@ -50,15 +50,15 @@ export async function getOrCreateUserWorkspace(userId: string): Promise<Workspac
     .select('workspace_id')
     .eq('user_id', userId)
     .limit(1)
-    .single()
+    .maybeSingle()
 
-  if (memberData) {
+  if (memberData && !memberError) {
     // User is a member, get the workspace
     const { data: workspace, error } = await supabaseAdmin
       .from('workspaces')
       .select('*')
       .eq('id', memberData.workspace_id)
-      .single()
+      .maybeSingle()
 
     if (workspace && !error) {
       return workspace as Workspace
@@ -71,7 +71,7 @@ export async function getOrCreateUserWorkspace(userId: string): Promise<Workspac
     .select('*')
     .eq('owner_id', userId)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (ownedWorkspace && !ownedError) {
     return ownedWorkspace as Workspace
@@ -88,17 +88,23 @@ export async function getOrCreateUserWorkspace(userId: string): Promise<Workspac
     .single()
 
   if (createError || !newWorkspace) {
-    throw new Error(`Failed to create workspace: ${createError?.message}`)
+    console.error('Error creating workspace:', createError)
+    throw new Error(`Failed to create workspace: ${createError?.message || 'Unknown error'}`)
   }
 
   // Add user as owner member
-  await supabaseAdmin
+  const { error: memberInsertError } = await supabaseAdmin
     .from('workspace_members')
     .insert({
       workspace_id: newWorkspace.id,
       user_id: userId,
       role: 'owner',
     })
+
+  if (memberInsertError) {
+    console.error('Error adding user as workspace member:', memberInsertError)
+    // Don't fail - workspace was created, member can be added later
+  }
 
   return newWorkspace as Workspace
 }

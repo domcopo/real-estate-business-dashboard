@@ -20,13 +20,19 @@ export default function SettingsPage() {
   const loadWorkspace = async () => {
     try {
       setError(null)
+      setLoading(true)
       const response = await fetch('/api/workspace')
+      const data = await response.json().catch(() => ({}))
+      
       if (response.ok) {
-        const data = await response.json()
-        setWorkspaceId(data.workspace?.id || null)
+        if (data.workspace?.id) {
+          setWorkspaceId(data.workspace.id)
+          setError(null)
+        } else {
+          setError('Workspace was created but ID is missing. Please refresh the page.')
+        }
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.details || errorData.error || 'Failed to load workspace'
+        const errorMessage = data.details || data.error || 'Failed to load workspace'
         setError(errorMessage)
         
         // Check if it's a table doesn't exist error
@@ -44,6 +50,7 @@ export default function SettingsPage() {
 
   const createWorkspace = async () => {
     setCreating(true)
+    setError(null)
     try {
       const response = await fetch('/api/workspace', {
         method: 'POST',
@@ -53,13 +60,22 @@ export default function SettingsPage() {
         body: JSON.stringify({ name: 'My Workspace' }),
       })
       
+      const data = await response.json().catch(() => ({}))
+      
       if (response.ok) {
-        const data = await response.json()
-        setWorkspaceId(data.workspace?.id || null)
-        setError(null)
+        if (data.workspace?.id) {
+          setWorkspaceId(data.workspace.id)
+          setError(null)
+          // Reload to show the team management UI
+          setTimeout(() => {
+            window.location.reload()
+          }, 500)
+        } else {
+          setError('Workspace was created but ID is missing. Please refresh the page.')
+        }
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        setError(errorData.error || 'Failed to create workspace')
+        const errorMessage = data.details || data.error || 'Failed to create workspace'
+        setError(errorMessage)
       }
     } catch (error: any) {
       console.error('Failed to create workspace:', error)
