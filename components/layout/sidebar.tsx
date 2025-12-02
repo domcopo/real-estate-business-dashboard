@@ -50,7 +50,13 @@ const navItems: NavItem[] = [
   { title: "Settings", href: "/settings", icon: Settings },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+  onOpen?: () => void
+}
+
+export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useUser()
   const { userMemberships, setActive, isLoaded } = useOrganizationList()
@@ -59,22 +65,52 @@ export function Sidebar() {
   const organizationList = userMemberships?.data || []
 
   return (
-    <div className={cn(
-      "flex h-screen w-64 flex-col border-r bg-background transition-all",
-      collapsed && "w-16"
-    )}>
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={onOpen}
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-md bg-background border shadow-lg"
+        aria-label="Open menu"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <div className={cn(
+        "flex h-screen w-64 flex-col border-r bg-background transition-all fixed lg:static z-50",
+        collapsed && "w-16",
+        // Mobile: slide in/out
+        "lg:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b px-4">
         {!collapsed && (
           <h1 className="text-lg font-semibold">Unified Workspace</h1>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Mobile close button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="lg:hidden"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </Button>
+          {/* Desktop collapse button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className="hidden lg:flex"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       {/* Workspace Switcher */}
@@ -152,7 +188,8 @@ export function Sidebar() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

@@ -108,15 +108,15 @@ export default function SubscriptionsPage() {
   const totalMonthly = subscriptions.reduce((sum, sub) => sum + sub.cost, 0)
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Subscriptions</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Track and manage your subscriptions
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <SaveButton onSave={handleSave} />
           <Button>
             <Plus className="mr-2 h-4 w-4" />

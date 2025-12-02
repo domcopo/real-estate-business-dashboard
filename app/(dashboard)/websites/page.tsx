@@ -109,15 +109,15 @@ export default function WebsitesPage() {
   }
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Websites & Tech Stack</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Websites & Tech Stack</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage all your websites and their technical details
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <SaveButton onSave={handleSave} />
           <Button>
             <Plus className="mr-2 h-4 w-4" />

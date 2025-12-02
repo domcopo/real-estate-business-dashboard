@@ -929,17 +929,17 @@ export default function PropertiesPage() {
   ]
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Property Management
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Portfolio overview and financial tracking
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <SaveButton onSave={handleSaveProperties} />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
@@ -970,14 +970,14 @@ export default function PropertiesPage() {
       </div>
 
       {/* Status Filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Filter by status:</span>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">Filter by status:</span>
         <select
           id="statusFilter"
           name="statusFilter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1 border rounded-md text-sm"
+          className="px-3 py-2 border rounded-md text-sm w-full sm:w-auto min-h-[44px]"
         >
           <option value="all">All</option>
           <option value="rented">Rented</option>
@@ -988,8 +988,8 @@ export default function PropertiesPage() {
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg">
-        <Table>
+      <div className="border rounded-lg overflow-x-auto">
+        <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow>
               <TableHead

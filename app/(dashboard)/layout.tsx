@@ -14,6 +14,7 @@ export default function DashboardLayout({
   const { isLoaded, isSignedIn } = useUser()
   const router = useRouter()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Show timeout message if Clerk takes too long (likely misconfigured)
   useEffect(() => {
@@ -31,6 +32,17 @@ export default function DashboardLayout({
       router.push("/sign-in")
     }
   }, [isLoaded, isSignedIn, router])
+
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   if (!isLoaded) {
     return (
@@ -63,11 +75,21 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">
+    <div className="flex h-screen relative">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpen={() => setSidebarOpen(true)} />
+      
+      <main className="flex-1 overflow-auto w-full lg:w-auto">
         {children}
       </main>
+      
       <GoHighLevelButton />
     </div>
   )
