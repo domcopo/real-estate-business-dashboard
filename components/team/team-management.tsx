@@ -269,6 +269,22 @@ export function TeamManagement({ workspaceId }: TeamManagementProps) {
           </div>
         ))}
       </div>
+
+      {/* Info Card */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 mb-1">How Team Invitations Work</h3>
+              <p className="text-sm text-blue-800">
+                Enter your teammate&apos;s email address below. When they sign up with that email (using the same sign-in system), they&apos;ll automatically be prompted to join your workspace. No separate accounts or passwords needed - they use their own email and password!
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Invite New Member */}
       <Card>
         <CardHeader>

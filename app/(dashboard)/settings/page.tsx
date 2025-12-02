@@ -14,21 +14,56 @@ export default function SettingsPage() {
   const [snapToGrid, setSnapToGrid] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const loadWorkspace = async () => {
+    try {
+      setError(null)
+      const response = await fetch('/api/workspace')
+      if (response.ok) {
+        const data = await response.json()
+        setWorkspaceId(data.workspace?.id || null)
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        setError(errorData.error || 'Failed to load workspace')
+      }
+    } catch (error: any) {
+      console.error('Failed to load workspace:', error)
+      setError(error.message || 'Failed to load workspace')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const createWorkspace = async () => {
+    setCreating(true)
+    try {
+      const response = await fetch('/api/workspace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'My Workspace' }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setWorkspaceId(data.workspace?.id || null)
+        setError(null)
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        setError(errorData.error || 'Failed to create workspace')
+      }
+    } catch (error: any) {
+      console.error('Failed to create workspace:', error)
+      setError(error.message || 'Failed to create workspace')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   useEffect(() => {
-    async function loadWorkspace() {
-      try {
-        const response = await fetch('/api/workspace')
-        if (response.ok) {
-          const data = await response.json()
-          setWorkspaceId(data.workspace?.id || null)
-        }
-      } catch (error) {
-        console.error('Failed to load workspace:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
     loadWorkspace()
   }, [])
 
@@ -62,8 +97,46 @@ export default function SettingsPage() {
             <TeamManagement workspaceId={workspaceId} />
           ) : (
             <Card>
-              <CardContent className="p-8 text-center">
-                <div className="text-muted-foreground">Failed to load workspace</div>
+              <CardHeader>
+                <CardTitle>Team Management</CardTitle>
+                <CardDescription>
+                  {error || 'Workspace not found'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 text-center space-y-4">
+                <div className="text-muted-foreground">
+                  {error ? (
+                    <p>Unable to load your workspace. This might be because:</p>
+                  ) : (
+                    <p>You don&apos;t have a workspace yet. Create one to start inviting team members.</p>
+                  )}
+                </div>
+                {error && (
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>• The database might not be set up correctly</p>
+                    <p>• The workspace tables might not exist</p>
+                    <p>• There might be a connection issue</p>
+                  </div>
+                )}
+                <Button 
+                  onClick={createWorkspace} 
+                  disabled={creating}
+                  className="mt-4"
+                >
+                  {creating ? 'Creating...' : 'Create Workspace'}
+                </Button>
+                <div className="text-xs text-muted-foreground mt-4 pt-4 border-t">
+                  <p className="font-semibold mb-2">How to invite team members:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-left max-w-md mx-auto">
+                    <li>Create a workspace (click button above)</li>
+                    <li>Enter your teammate&apos;s email address</li>
+                    <li>They&apos;ll receive an invitation</li>
+                    <li>When they sign up with that email, they&apos;ll be prompted to join</li>
+                  </ol>
+                  <p className="mt-2 text-left max-w-md mx-auto">
+                    <strong>Note:</strong> Teammates use the same sign-in system (Clerk) - they sign up with their email and password, no separate accounts needed!
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
