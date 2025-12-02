@@ -197,13 +197,19 @@ export default function PropertiesPage() {
         } else {
           const errorData = await response.json().catch(() => ({}))
           console.error('Failed to load properties:', errorData)
-          // Keep empty array on error
-          setProperties([])
+          // Don't clear properties on error - might be a temporary issue
+          // Only set empty if we're sure there are no properties
+          if (properties.length === 0) {
+            setProperties([])
+          }
         }
       } catch (error) {
         console.error('Failed to load properties:', error)
-        // Keep empty array on error
-        setProperties([])
+        // Don't clear properties on error - might be a temporary issue
+        // Only set empty if we're sure there are no properties
+        if (properties.length === 0) {
+          setProperties([])
+        }
       } finally {
         setLoading(false)
       }
@@ -1062,7 +1068,27 @@ export default function PropertiesPage() {
             <FileText className="mr-2 h-4 w-4" />
             Export JSON
           </Button>
-        <Button>
+        <Button
+          onClick={() => {
+            // Add a new empty property to the list
+            const newProperty: Property = {
+              id: `temp-${Date.now()}`, // Temporary ID until saved
+              address: '',
+              type: '',
+              status: 'vacant',
+              purchasePrice: 0,
+              currentEstValue: 0,
+              monthlyMortgagePayment: 0,
+              monthlyInsurance: 0,
+              monthlyPropertyTax: 0,
+              monthlyOtherCosts: 0,
+              monthlyGrossRent: 0,
+              rentRoll: [],
+              workRequests: [],
+            }
+            setProperties([...properties, newProperty])
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Property
         </Button>
