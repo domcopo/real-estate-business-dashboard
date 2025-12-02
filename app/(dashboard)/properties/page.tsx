@@ -1,5 +1,7 @@
 "use client"
 
+"use client"
+
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -29,8 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, ArrowUpDown, Edit, Upload, Download, FileText, Star, AlertCircle, Trash2, Check, X } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
 import { Property } from "@/types"
-import { useState, useMemo, useCallback, useRef } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { useUser } from "@clerk/nextjs"
 import Link from "next/link"
 import {
   PropertyField,
@@ -142,10 +146,50 @@ type SortField = "address" | "status" | "currentEstValue" | "purchasePrice" | "m
 type SortDirection = "asc" | "desc"
 
 export default function PropertiesPage() {
+  const { user } = useUser()
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [properties, setProperties] = useState<Property[]>(mockProperties)
+
+  // Load properties from database on mount
+  useEffect(() => {
+    async function loadProperties() {
+      if (!user) return
+
+      try {
+        const response = await fetch('/api/properties')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.properties && data.properties.length > 0) {
+            const loadedProperties: Property[] = data.properties.map((p: any) => ({
+              id: p.id,
+              address: p.address,
+              type: p.type,
+              status: p.status,
+              mortgageHolder: p.mortgage_holder,
+              purchasePrice: parseFloat(p.purchase_price) || 0,
+              currentEstValue: parseFloat(p.current_est_value) || 0,
+              monthlyMortgagePayment: parseFloat(p.monthly_mortgage_payment) || 0,
+              monthlyInsurance: parseFloat(p.monthly_insurance) || 0,
+              monthlyPropertyTax: parseFloat(p.monthly_property_tax) || 0,
+              monthlyOtherCosts: parseFloat(p.monthly_other_costs) || 0,
+              monthlyGrossRent: parseFloat(p.monthly_gross_rent) || 0,
+              ownership: p.ownership,
+              linkedWebsites: p.linked_websites || [],
+              rentRoll: [], // TODO: Load from rent_roll_units table
+              workRequests: [], // TODO: Load from work_requests table
+            }))
+            setProperties(loadedProperties)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load properties:', error)
+      }
+    }
+
+    loadProperties()
+  }, [user])
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [csvData, setCsvData] = useState<string[][]>([])
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -384,6 +428,45 @@ export default function PropertiesPage() {
   const handleCellCancel = () => {
     setEditingCell(null)
     setEditValue("")
+  }
+
+  const handleSaveProperties = async () => {
+    try {
+      // Filter out any properties that are missing required fields
+      const validProperties = properties.filter((prop: Property) => {
+        return prop.address && prop.type && prop.status
+      })
+
+      if (validProperties.length === 0) {
+        throw new Error('No valid properties to save. Please ensure all properties have address, type, and status.')
+      }
+
+      console.log('Saving properties:', validProperties.length)
+
+      const response = await fetch('/api/properties', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          properties: validProperties,
+          workspaceId: null,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Properties saved successfully:', data)
+        return // Success - SaveButton will show success state
+      } else {
+        const errorData = await response.json()
+        console.error('Save failed:', errorData)
+        throw new Error(errorData.details || errorData.error || 'Failed to save properties')
+      }
+    } catch (error: any) {
+      console.error('Error saving properties:', error)
+      throw error // Re-throw so SaveButton can handle it
+    }
   }
 
   // Render editable cell
@@ -857,6 +940,7 @@ export default function PropertiesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <SaveButton onSave={handleSaveProperties} />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
             Import

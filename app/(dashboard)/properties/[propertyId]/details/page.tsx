@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useState, use } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select"
 import { Property, RentRollUnit, WorkRequest } from "@/types"
 import { ArrowLeft, Plus, Trash2, Save, Upload, FileText, Star, AlertCircle } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
 
 // Mock data - in production, this would come from an API
 const mockProperties: Property[] = [
@@ -125,12 +126,10 @@ const mockProperties: Property[] = [
   },
 ]
 
-export default function PropertyDetailsPage() {
-  const params = useParams()
+export default function PropertyDetailsPage({ params }: { params: Promise<{ propertyId: string }> }) {
+  const resolvedParams = use(params)
+  const propertyId = resolvedParams.propertyId
   const router = useRouter()
-  const propertyId = params?.propertyId 
-    ? (Array.isArray(params.propertyId) ? params.propertyId[0] : params.propertyId)
-    : undefined
 
   // Find the property
   const property = propertyId ? mockProperties.find((p) => p.id === propertyId) : undefined
@@ -146,24 +145,9 @@ export default function PropertyDetailsPage() {
   const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
   const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
 
-  // Early return after all hooks
-  if (!property || !propertyData) {
-    return (
-      <div className="p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Property Not Found</h1>
-          <Button onClick={() => router.push("/properties")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Properties
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // After the early return, propertyData is guaranteed to be non-null
-  // Calculate metrics
+  // Helper functions - must be defined before early return
   const calculateMonthlyCosts = (): number => {
+    if (!propertyData) return 0
     return (
       propertyData.monthlyMortgagePayment +
       propertyData.monthlyInsurance +
@@ -173,6 +157,7 @@ export default function PropertyDetailsPage() {
   }
 
   const calculateMonthlyCashflow = (): number => {
+    if (!propertyData) return 0
     return propertyData.monthlyGrossRent - calculateMonthlyCosts()
   }
 
@@ -181,12 +166,13 @@ export default function PropertyDetailsPage() {
   }
 
   const calculateCapRate = (): number => {
-    if (propertyData.currentEstValue === 0) return 0
+    if (!propertyData || propertyData.currentEstValue === 0) return 0
     const netOperatingIncome = calculateAnnualCashflow()
     return (netOperatingIncome / propertyData.currentEstValue) * 100
   }
 
   const calculateCashOnCashReturn = (): number => {
+    if (!propertyData) return 0
     const downPayment = propertyData.purchasePrice * 0.2 // Assuming 20% down
     if (downPayment === 0) return 0
     const annualCashflow = calculateAnnualCashflow()
@@ -213,10 +199,47 @@ export default function PropertyDetailsPage() {
     })
   }
 
-  const handleSaveProperty = () => {
-    // In production, this would save to an API
-    console.log("Saving property:", propertyData)
-    alert("Property saved! (In production, this would save to your database)")
+  const handleSaveProperty = async () => {
+    if (!propertyData || !propertyId) {
+      throw new Error('Property data or ID missing')
+    }
+
+    try {
+      // Save main property data
+      const response = await fetch(`/api/properties/${propertyId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: propertyData.address,
+          type: propertyData.type,
+          status: propertyData.status,
+          mortgageHolder: propertyData.mortgageHolder,
+          purchasePrice: propertyData.purchasePrice,
+          currentEstValue: propertyData.currentEstValue,
+          monthlyMortgagePayment: propertyData.monthlyMortgagePayment,
+          monthlyInsurance: propertyData.monthlyInsurance,
+          monthlyPropertyTax: propertyData.monthlyPropertyTax,
+          monthlyOtherCosts: propertyData.monthlyOtherCosts,
+          monthlyGrossRent: propertyData.monthlyGrossRent,
+          ownership: propertyData.ownership,
+          linkedWebsites: propertyData.linkedWebsites,
+        }),
+      })
+
+      if (response.ok) {
+        // TODO: Save rent roll units and work requests separately
+        // For now, just save the main property
+        return // Success - SaveButton will show success state
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save property')
+      }
+    } catch (error: any) {
+      console.error('Error saving property:', error)
+      throw error // Re-throw so SaveButton can handle it
+    }
   }
 
   const handleAddUnit = () => {
@@ -320,6 +343,10 @@ export default function PropertyDetailsPage() {
   // Get work request count for badge
   const workRequestCount = workRequests.length
 
+  // After early return, propertyData is guaranteed to be non-null
+  // Use non-null assertion for TypeScript
+  const safePropertyData = propertyData!
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -335,7 +362,7 @@ export default function PropertyDetailsPage() {
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                {propertyData.address}
+                {safePropertyData.address}
                 {needsAttention && (
                   <Star className="h-6 w-6 text-red-500 fill-red-500" />
                 )}
@@ -344,9 +371,9 @@ export default function PropertyDetailsPage() {
                 )}
               </h1>
               <p className="text-muted-foreground">
-                {propertyData.type} •{" "}
-                <Badge variant={getStatusBadgeVariant(propertyData.status)}>
-                  {propertyData.status.replace("_", " ")}
+                {safePropertyData.type} •{" "}
+                <Badge variant={getStatusBadgeVariant(safePropertyData.status)}>
+                  {safePropertyData.status.replace("_", " ")}
                 </Badge>
                 {needsAttention && (
                   <span className="ml-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
@@ -363,10 +390,7 @@ export default function PropertyDetailsPage() {
             </div>
           </div>
         </div>
-        <Button onClick={handleSaveProperty}>
-          <Save className="mr-2 h-4 w-4" />
-          Save Changes
-        </Button>
+        <SaveButton onSave={handleSaveProperty} />
       </div>
 
       {/* Tabs */}
@@ -402,7 +426,7 @@ export default function PropertyDetailsPage() {
                   <Input
                     id="mortgageHolder"
                     name="mortgageHolder"
-                    value={propertyData.mortgageHolder || ""}
+                    value={safePropertyData.mortgageHolder || ""}
                     onChange={(e) =>
                       handlePropertyFieldChange("mortgageHolder", e.target.value)
                     }
@@ -416,7 +440,7 @@ export default function PropertyDetailsPage() {
                     id="purchasePrice"
                     name="purchasePrice"
                     type="number"
-                    value={propertyData.purchasePrice}
+                    value={safePropertyData.purchasePrice}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "purchasePrice",
@@ -432,7 +456,7 @@ export default function PropertyDetailsPage() {
                     id="currentEstValue"
                     name="currentEstValue"
                     type="number"
-                    value={propertyData.currentEstValue}
+                    value={safePropertyData.currentEstValue}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "currentEstValue",
@@ -450,7 +474,7 @@ export default function PropertyDetailsPage() {
                     id="monthlyMortgagePayment"
                     name="monthlyMortgagePayment"
                     type="number"
-                    value={propertyData.monthlyMortgagePayment}
+                    value={safePropertyData.monthlyMortgagePayment}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyMortgagePayment",
@@ -466,7 +490,7 @@ export default function PropertyDetailsPage() {
                     id="monthlyInsurance"
                     name="monthlyInsurance"
                     type="number"
-                    value={propertyData.monthlyInsurance}
+                    value={safePropertyData.monthlyInsurance}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyInsurance",
@@ -484,7 +508,7 @@ export default function PropertyDetailsPage() {
                     id="monthlyPropertyTax"
                     name="monthlyPropertyTax"
                     type="number"
-                    value={propertyData.monthlyPropertyTax}
+                    value={safePropertyData.monthlyPropertyTax}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyPropertyTax",
@@ -500,7 +524,7 @@ export default function PropertyDetailsPage() {
                     id="monthlyOtherCosts"
                     name="monthlyOtherCosts"
                     type="number"
-                    value={propertyData.monthlyOtherCosts}
+                    value={safePropertyData.monthlyOtherCosts}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyOtherCosts",
@@ -516,7 +540,7 @@ export default function PropertyDetailsPage() {
                     id="monthlyGrossRent"
                     name="monthlyGrossRent"
                     type="number"
-                    value={propertyData.monthlyGrossRent}
+                    value={safePropertyData.monthlyGrossRent}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyGrossRent",
@@ -529,7 +553,7 @@ export default function PropertyDetailsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
-                    value={propertyData.status}
+                    value={safePropertyData.status}
                     onValueChange={(value) =>
                       handlePropertyFieldChange(
                         "status",
@@ -549,7 +573,7 @@ export default function PropertyDetailsPage() {
                       <SelectItem value="sold">Sold</SelectItem>
                     </SelectContent>
                   </Select>
-                  <input type="hidden" name="status" value={propertyData.status} />
+                  <input type="hidden" name="status" value={safePropertyData.status} />
                 </div>
               </CardContent>
             </Card>

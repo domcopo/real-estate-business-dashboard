@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus, ZoomIn, ZoomOut, Grid, Save } from "lucide-react"
+import { Plus, ZoomIn, ZoomOut, Grid, Save, Loader2 } from "lucide-react"
 import {
   DndContext,
   KeyboardSensor,
@@ -12,6 +12,7 @@ import {
   DragEndEvent,
   useDraggable,
 } from "@dnd-kit/core"
+import { useUser } from "@clerk/nextjs"
 
 interface Blop {
   id: string
@@ -36,9 +37,14 @@ const initialBlops: Blop[] = [
 ]
 
 export default function FlexboardPage() {
+  const { user } = useUser()
   const [blops, setBlops] = useState<Blop[]>(initialBlops)
   const [zoom, setZoom] = useState(1)
   const [showGrid, setShowGrid] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -49,6 +55,42 @@ export default function FlexboardPage() {
     useSensor(KeyboardSensor)
   )
 
+  // Load blops from database on mount
+  useEffect(() => {
+    async function loadBlops() {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const response = await fetch('/api/blops')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.blops && data.blops.length > 0) {
+            // Convert database format to component format
+            const loadedBlops: Blop[] = data.blops.map((b: any) => ({
+              id: b.id,
+              x: b.x,
+              y: b.y,
+              shape: b.shape,
+              color: b.color,
+              content: b.content,
+              type: b.type,
+            }))
+            setBlops(loadedBlops)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load blops:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadBlops()
+  }, [user])
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, delta } = event
     setBlops((blops) =>
@@ -58,7 +100,72 @@ export default function FlexboardPage() {
           : blop
       )
     )
+    // Auto-save will trigger via useEffect
   }
+
+  const saveBlops = async (showAlert = false) => {
+    if (!user) {
+      if (showAlert) alert('Please sign in to save')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await fetch('/api/blops', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blops: blops,
+          workspaceId: null, // You can get this from Clerk organization if needed
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setLastSaved(new Date())
+        if (showAlert) {
+          alert(`Saved ${data.blops?.length || blops.length} blops successfully!`)
+        }
+      } else {
+        const error = await response.json()
+        if (showAlert) {
+          alert(`Failed to save: ${error.error || 'Unknown error'}`)
+        }
+        console.error('Save error:', error)
+      }
+    } catch (error) {
+      console.error('Error saving blops:', error)
+      if (showAlert) {
+        alert('Failed to save blops. Please try again.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Auto-save after changes (debounced)
+  useEffect(() => {
+    if (!user || loading) return
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    // Set new timeout
+    saveTimeoutRef.current = setTimeout(() => {
+      saveBlops(false) // Auto-save without alert
+    }, 1000) // Wait 1 second after last change
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blops, user, loading])
 
   const addBlop = () => {
     const newBlop: Blop = {
@@ -71,6 +178,7 @@ export default function FlexboardPage() {
       type: "text",
     }
     setBlops([...blops, newBlop])
+    // Auto-save will trigger via useEffect
   }
 
   return (
@@ -105,9 +213,24 @@ export default function FlexboardPage() {
           >
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon">
-            <Save className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => saveBlops(true)}
+            disabled={saving || !user}
+            title={!user ? "Sign in to save" : lastSaved ? `Last saved: ${lastSaved.toLocaleTimeString()}` : "Save blops to database"}
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
           </Button>
+          {lastSaved && !saving && (
+            <span className="text-xs text-muted-foreground">
+              Saved {lastSaved.toLocaleTimeString()}
+            </span>
+          )}
           <Button onClick={addBlop}>
             <Plus className="mr-2 h-4 w-4" />
             Add Blop
@@ -117,26 +240,32 @@ export default function FlexboardPage() {
 
       {/* Canvas */}
       <div className="flex-1 overflow-auto relative bg-muted/30">
-        <DndContext
-          sensors={sensors}
-          onDragEnd={handleDragEnd}
-        >
-          <div
-            className="relative w-full h-full min-h-[800px]"
-            style={{
-              backgroundImage: showGrid
-                ? "radial-gradient(circle, #e5e7eb 1px, transparent 1px)"
-                : "none",
-              backgroundSize: "20px 20px",
-              transform: `scale(${zoom})`,
-              transformOrigin: "top left",
-            }}
-          >
-            {blops.map((blop) => (
-              <BlopComponent key={blop.id} blop={blop} />
-            ))}
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </DndContext>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <div
+              className="relative w-full h-full min-h-[800px]"
+              style={{
+                backgroundImage: showGrid
+                  ? "radial-gradient(circle, #e5e7eb 1px, transparent 1px)"
+                  : "none",
+                backgroundSize: "20px 20px",
+                transform: `scale(${zoom})`,
+                transformOrigin: "top left",
+              }}
+            >
+              {blops.map((blop) => (
+                <BlopComponent key={blop.id} blop={blop} />
+              ))}
+            </div>
+          </DndContext>
+        )}
       </div>
     </div>
   )

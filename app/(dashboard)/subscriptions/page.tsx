@@ -1,9 +1,25 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Calendar, DollarSign } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
+import { useUser } from "@clerk/nextjs"
+
+interface Subscription {
+  id: string
+  name: string
+  cost: number
+  period: "monthly" | "annual"
+  renewalDate: string
+  category: string
+  website?: string
+}
 
 export default function SubscriptionsPage() {
-  const subscriptions = [
+  const { user } = useUser()
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([
     {
       id: "1",
       name: "Netflix",
@@ -31,7 +47,63 @@ export default function SubscriptionsPage() {
       category: "Hosting",
       website: "example.com",
     },
-  ]
+  ])
+
+  // Load subscriptions from database on mount
+  useEffect(() => {
+    async function loadSubscriptions() {
+      if (!user) return
+
+      try {
+        const response = await fetch('/api/subscriptions')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.subscriptions && data.subscriptions.length > 0) {
+            const loadedSubscriptions: Subscription[] = data.subscriptions.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              cost: parseFloat(s.cost) || 0,
+              period: s.period,
+              renewalDate: s.renewal_date,
+              category: s.category,
+              website: s.website_id || undefined,
+            }))
+            setSubscriptions(loadedSubscriptions)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load subscriptions:', error)
+      }
+    }
+
+    loadSubscriptions()
+  }, [user])
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriptions: subscriptions,
+          workspaceId: null,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return // Success - SaveButton will show success state
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save subscriptions')
+      }
+    } catch (error: any) {
+      console.error('Error saving subscriptions:', error)
+      throw error // Re-throw so SaveButton can handle it
+    }
+  }
 
   const totalMonthly = subscriptions.reduce((sum, sub) => sum + sub.cost, 0)
 
@@ -44,10 +116,13 @@ export default function SubscriptionsPage() {
             Track and manage your subscriptions
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Subscription
-        </Button>
+        <div className="flex items-center gap-2">
+          <SaveButton onSave={handleSave} />
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Subscription
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}
