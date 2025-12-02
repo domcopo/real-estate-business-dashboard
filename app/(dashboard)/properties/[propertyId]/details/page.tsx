@@ -1,0 +1,939 @@
+"use client"
+
+import { useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Property, RentRollUnit, WorkRequest } from "@/types"
+import { ArrowLeft, Plus, Trash2, Save, Upload, FileText } from "lucide-react"
+
+// Mock data - in production, this would come from an API
+const mockProperties: Property[] = [
+  {
+    id: "1",
+    address: "123 Main St, San Francisco, CA",
+    type: "Apartment",
+    status: "rented",
+    mortgageHolder: "Chase Bank",
+    purchasePrice: 750000,
+    currentEstValue: 850000,
+    monthlyMortgagePayment: 3200,
+    monthlyInsurance: 150,
+    monthlyPropertyTax: 800,
+    monthlyOtherCosts: 200,
+    monthlyGrossRent: 4500,
+    rentRoll: [
+      {
+        unitName: "Unit 1A",
+        tenantName: "John Doe",
+        monthlyRent: 2500,
+        leaseStart: "2024-01-01",
+        leaseEnd: "2024-12-31",
+        securityDeposit: 2500,
+      },
+      {
+        unitName: "Unit 1B",
+        tenantName: "Jane Smith",
+        monthlyRent: 2000,
+        leaseStart: "2024-02-01",
+        leaseEnd: "2025-01-31",
+        securityDeposit: 2000,
+      },
+    ],
+    workRequests: [
+      {
+        id: "1",
+        dateLogged: "2024-11-15",
+        description: "Fix leaky faucet",
+        status: "completed",
+        cost: 150,
+      },
+    ],
+  },
+  {
+    id: "2",
+    address: "456 Oak Ave, Los Angeles, CA",
+    type: "House",
+    status: "rented",
+    mortgageHolder: "Wells Fargo",
+    purchasePrice: 1100000,
+    currentEstValue: 1200000,
+    monthlyMortgagePayment: 4800,
+    monthlyInsurance: 250,
+    monthlyPropertyTax: 1200,
+    monthlyOtherCosts: 300,
+    monthlyGrossRent: 6500,
+    rentRoll: [
+      {
+        unitName: "Main House",
+        tenantName: "Bob Johnson",
+        monthlyRent: 6500,
+        leaseStart: "2024-03-01",
+        leaseEnd: "2025-02-28",
+        securityDeposit: 6500,
+      },
+    ],
+    workRequests: [],
+  },
+  {
+    id: "3",
+    address: "789 Pine Rd, San Diego, CA",
+    type: "Condo",
+    status: "vacant",
+    mortgageHolder: "Bank of America",
+    purchasePrice: 450000,
+    currentEstValue: 500000,
+    monthlyMortgagePayment: 2100,
+    monthlyInsurance: 120,
+    monthlyPropertyTax: 500,
+    monthlyOtherCosts: 150,
+    monthlyGrossRent: 0,
+    rentRoll: [],
+    workRequests: [
+      {
+        id: "2",
+        dateLogged: "2024-11-20",
+        description: "Paint interior",
+        status: "in_progress",
+        cost: 800,
+      },
+    ],
+  },
+]
+
+export default function PropertyDetailsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const propertyId = params?.propertyId 
+    ? (Array.isArray(params.propertyId) ? params.propertyId[0] : params.propertyId)
+    : undefined
+
+  // Find the property
+  const property = propertyId ? mockProperties.find((p) => p.id === propertyId) : undefined
+
+  // State for editable property data - MUST be called before any early returns
+  const [propertyData, setPropertyData] = useState<Property | null>(property || null)
+  const [rentRoll, setRentRoll] = useState<RentRollUnit[]>(
+    property?.rentRoll || []
+  )
+  const [workRequests, setWorkRequests] = useState<WorkRequest[]>(
+    property?.workRequests || []
+  )
+  const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
+  const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
+
+  // Early return after all hooks
+  if (!property || !propertyData) {
+    return (
+      <div className="p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Property Not Found</h1>
+          <Button onClick={() => router.push("/properties")}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Properties
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // After the early return, propertyData is guaranteed to be non-null
+  // Calculate metrics
+  const calculateMonthlyCosts = (): number => {
+    return (
+      propertyData.monthlyMortgagePayment +
+      propertyData.monthlyInsurance +
+      propertyData.monthlyPropertyTax +
+      propertyData.monthlyOtherCosts
+    )
+  }
+
+  const calculateMonthlyCashflow = (): number => {
+    return propertyData.monthlyGrossRent - calculateMonthlyCosts()
+  }
+
+  const calculateAnnualCashflow = (): number => {
+    return calculateMonthlyCashflow() * 12
+  }
+
+  const calculateCapRate = (): number => {
+    if (propertyData.currentEstValue === 0) return 0
+    const netOperatingIncome = calculateAnnualCashflow()
+    return (netOperatingIncome / propertyData.currentEstValue) * 100
+  }
+
+  const calculateCashOnCashReturn = (): number => {
+    const downPayment = propertyData.purchasePrice * 0.2 // Assuming 20% down
+    if (downPayment === 0) return 0
+    const annualCashflow = calculateAnnualCashflow()
+    return (annualCashflow / downPayment) * 100
+  }
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value)
+  }
+
+  const formatPercentage = (value: number) => {
+    return `${value.toFixed(2)}%`
+  }
+
+  const handlePropertyFieldChange = (field: keyof Property, value: any) => {
+    setPropertyData((prev) => {
+      if (!prev) return null
+      return { ...prev, [field]: value }
+    })
+  }
+
+  const handleSaveProperty = () => {
+    // In production, this would save to an API
+    console.log("Saving property:", propertyData)
+    alert("Property saved! (In production, this would save to your database)")
+  }
+
+  const handleAddUnit = () => {
+    if (
+      newUnit.unitName &&
+      newUnit.tenantName &&
+      newUnit.monthlyRent &&
+      newUnit.leaseStart &&
+      newUnit.leaseEnd &&
+      newUnit.securityDeposit
+    ) {
+      setRentRoll([
+        ...rentRoll,
+        {
+          unitName: newUnit.unitName,
+          tenantName: newUnit.tenantName,
+          monthlyRent: newUnit.monthlyRent,
+          leaseStart: newUnit.leaseStart,
+          leaseEnd: newUnit.leaseEnd,
+          securityDeposit: newUnit.securityDeposit,
+        },
+      ])
+      setNewUnit({})
+      // Update monthly gross rent
+      const totalRent = [...rentRoll, newUnit as RentRollUnit].reduce(
+        (sum, unit) => sum + unit.monthlyRent,
+        0
+      )
+      handlePropertyFieldChange("monthlyGrossRent", totalRent)
+    }
+  }
+
+  const handleDeleteUnit = (index: number) => {
+    const updated = rentRoll.filter((_, i) => i !== index)
+    setRentRoll(updated)
+    const totalRent = updated.reduce((sum, unit) => sum + unit.monthlyRent, 0)
+    handlePropertyFieldChange("monthlyGrossRent", totalRent)
+  }
+
+  const handleAddWorkRequest = () => {
+    if (newWorkRequest.description && newWorkRequest.dateLogged) {
+      const workRequest: WorkRequest = {
+        id: Date.now().toString(),
+        dateLogged: newWorkRequest.dateLogged,
+        description: newWorkRequest.description,
+        status: (newWorkRequest.status as WorkRequest["status"]) || "new",
+        cost: newWorkRequest.cost || 0,
+      }
+      setWorkRequests([...workRequests, workRequest])
+      setNewWorkRequest({})
+    }
+  }
+
+  const handleDeleteWorkRequest = (id: string) => {
+    setWorkRequests(workRequests.filter((wr) => wr.id !== id))
+  }
+
+  const handleUpdateWorkRequestStatus = (id: string, status: WorkRequest["status"]) => {
+    setWorkRequests(
+      workRequests.map((wr) => (wr.id === id ? { ...wr, status } : wr))
+    )
+  }
+
+  const getStatusBadgeVariant = (status: Property["status"]) => {
+    switch (status) {
+      case "rented":
+        return "default"
+      case "vacant":
+        return "secondary"
+      case "under_maintenance":
+        return "destructive"
+      case "sold":
+        return "outline"
+      default:
+        return "default"
+    }
+  }
+
+  const getWorkRequestStatusBadgeVariant = (status: WorkRequest["status"]) => {
+    switch (status) {
+      case "new":
+        return "default"
+      case "in_progress":
+        return "secondary"
+      case "completed":
+        return "outline"
+      default:
+        return "default"
+    }
+  }
+
+  return (
+    <div className="p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/properties")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {propertyData.address}
+            </h1>
+            <p className="text-muted-foreground">
+              {propertyData.type} •{" "}
+              <Badge variant={getStatusBadgeVariant(propertyData.status)}>
+                {propertyData.status.replace("_", " ")}
+              </Badge>
+            </p>
+          </div>
+        </div>
+        <Button onClick={handleSaveProperty}>
+          <Save className="mr-2 h-4 w-4" />
+          Save Changes
+        </Button>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="financial" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="financial">Financial</TabsTrigger>
+          <TabsTrigger value="rentroll">Rent Roll</TabsTrigger>
+          <TabsTrigger value="workrequests">Work Requests</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
+
+        {/* Financial Tab */}
+        <TabsContent value="financial" className="space-y-4">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Financial Form */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Financial Information</CardTitle>
+                <CardDescription>
+                  Edit property financial details
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mortgageHolder">Mortgage Holder</Label>
+                  <Input
+                    id="mortgageHolder"
+                    value={propertyData.mortgageHolder || ""}
+                    onChange={(e) =>
+                      handlePropertyFieldChange("mortgageHolder", e.target.value)
+                    }
+                    placeholder="Bank name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="purchasePrice">Purchase Price</Label>
+                  <Input
+                    id="purchasePrice"
+                    type="number"
+                    value={propertyData.purchasePrice}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "purchasePrice",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currentEstValue">Current Est. Value</Label>
+                  <Input
+                    id="currentEstValue"
+                    type="number"
+                    value={propertyData.currentEstValue}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "currentEstValue",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyMortgagePayment">
+                    Monthly Mortgage Payment
+                  </Label>
+                  <Input
+                    id="monthlyMortgagePayment"
+                    type="number"
+                    value={propertyData.monthlyMortgagePayment}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "monthlyMortgagePayment",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyInsurance">Monthly Insurance</Label>
+                  <Input
+                    id="monthlyInsurance"
+                    type="number"
+                    value={propertyData.monthlyInsurance}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "monthlyInsurance",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyPropertyTax">
+                    Monthly Property Tax
+                  </Label>
+                  <Input
+                    id="monthlyPropertyTax"
+                    type="number"
+                    value={propertyData.monthlyPropertyTax}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "monthlyPropertyTax",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyOtherCosts">Monthly Other Costs</Label>
+                  <Input
+                    id="monthlyOtherCosts"
+                    type="number"
+                    value={propertyData.monthlyOtherCosts}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "monthlyOtherCosts",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyGrossRent">Monthly Gross Rent</Label>
+                  <Input
+                    id="monthlyGrossRent"
+                    type="number"
+                    value={propertyData.monthlyGrossRent}
+                    onChange={(e) =>
+                      handlePropertyFieldChange(
+                        "monthlyGrossRent",
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select
+                    value={propertyData.status}
+                    onValueChange={(value) =>
+                      handlePropertyFieldChange(
+                        "status",
+                        value as Property["status"]
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rented">Rented</SelectItem>
+                      <SelectItem value="vacant">Vacant</SelectItem>
+                      <SelectItem value="under_maintenance">
+                        Under Maintenance
+                      </SelectItem>
+                      <SelectItem value="sold">Sold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Calculated Metrics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Calculated Metrics</CardTitle>
+                <CardDescription>
+                  Automatically calculated based on financial data
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Monthly Total Costs</Label>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(calculateMonthlyCosts())}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Monthly Cashflow</Label>
+                  <div
+                    className={`text-2xl font-bold ${
+                      calculateMonthlyCashflow() >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {formatCurrency(calculateMonthlyCashflow())}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Annual Cashflow</Label>
+                  <div
+                    className={`text-2xl font-bold ${
+                      calculateAnnualCashflow() >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {formatCurrency(calculateAnnualCashflow())}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Cap Rate</Label>
+                  <div className="text-2xl font-bold">
+                    {formatPercentage(calculateCapRate())}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Cash-on-Cash Return</Label>
+                  <div className="text-2xl font-bold">
+                    {formatPercentage(calculateCashOnCashReturn())}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Rent Roll Tab */}
+        <TabsContent value="rentroll" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Rent Roll / Units</CardTitle>
+                  <CardDescription>
+                    Manage individual units and tenants
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Units Table */}
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Unit Name</TableHead>
+                      <TableHead>Tenant Name</TableHead>
+                      <TableHead className="text-right">Monthly Rent</TableHead>
+                      <TableHead>Lease Start</TableHead>
+                      <TableHead>Lease End</TableHead>
+                      <TableHead className="text-right">
+                        Security Deposit
+                      </TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rentRoll.map((unit, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {unit.unitName}
+                        </TableCell>
+                        <TableCell>{unit.tenantName}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(unit.monthlyRent)}
+                        </TableCell>
+                        <TableCell>{unit.leaseStart}</TableCell>
+                        <TableCell>{unit.leaseEnd}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(unit.securityDeposit)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteUnit(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {rentRoll.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          No units added yet
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Add Unit Form */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Add New Unit</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="unitName">Unit Name</Label>
+                      <Input
+                        id="unitName"
+                        value={newUnit.unitName || ""}
+                        onChange={(e) =>
+                          setNewUnit({ ...newUnit, unitName: e.target.value })
+                        }
+                        placeholder="e.g., Unit 1A"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tenantName">Tenant Name</Label>
+                      <Input
+                        id="tenantName"
+                        value={newUnit.tenantName || ""}
+                        onChange={(e) =>
+                          setNewUnit({ ...newUnit, tenantName: e.target.value })
+                        }
+                        placeholder="Tenant name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="monthlyRent">Monthly Rent</Label>
+                      <Input
+                        id="monthlyRent"
+                        type="number"
+                        value={newUnit.monthlyRent || ""}
+                        onChange={(e) =>
+                          setNewUnit({
+                            ...newUnit,
+                            monthlyRent: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="securityDeposit">Security Deposit</Label>
+                      <Input
+                        id="securityDeposit"
+                        type="number"
+                        value={newUnit.securityDeposit || ""}
+                        onChange={(e) =>
+                          setNewUnit({
+                            ...newUnit,
+                            securityDeposit: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="leaseStart">Lease Start</Label>
+                      <Input
+                        id="leaseStart"
+                        type="date"
+                        value={newUnit.leaseStart || ""}
+                        onChange={(e) =>
+                          setNewUnit({ ...newUnit, leaseStart: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="leaseEnd">Lease End</Label>
+                      <Input
+                        id="leaseEnd"
+                        type="date"
+                        value={newUnit.leaseEnd || ""}
+                        onChange={(e) =>
+                          setNewUnit({ ...newUnit, leaseEnd: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleAddUnit} className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Unit
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Work Requests Tab */}
+        <TabsContent value="workrequests" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Work Requests / Maintenance</CardTitle>
+              <CardDescription>
+                Track maintenance requests and repairs
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Work Requests Table */}
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date Logged</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {workRequests.map((request) => (
+                      <TableRow key={request.id}>
+                        <TableCell>{request.dateLogged}</TableCell>
+                        <TableCell>{request.description}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={getWorkRequestStatusBadgeVariant(
+                              request.status
+                            )}
+                          >
+                            {request.status.replace("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(request.cost)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Select
+                              value={request.status}
+                              onValueChange={(value) =>
+                                handleUpdateWorkRequestStatus(
+                                  request.id,
+                                  value as WorkRequest["status"]
+                                )
+                              }
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="new">New</SelectItem>
+                                <SelectItem value="in_progress">
+                                  In Progress
+                                </SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteWorkRequest(request.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {workRequests.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-muted-foreground"
+                        >
+                          No work requests logged yet
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Add Work Request Form */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Log New Work Request</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="dateLogged">Date Logged</Label>
+                      <Input
+                        id="dateLogged"
+                        type="date"
+                        value={newWorkRequest.dateLogged || ""}
+                        onChange={(e) =>
+                          setNewWorkRequest({
+                            ...newWorkRequest,
+                            dateLogged: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="workRequestStatus">Status</Label>
+                      <Select
+                        value={newWorkRequest.status || "new"}
+                        onValueChange={(value) =>
+                          setNewWorkRequest({
+                            ...newWorkRequest,
+                            status: value as WorkRequest["status"],
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="new">New</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Input
+                        id="description"
+                        value={newWorkRequest.description || ""}
+                        onChange={(e) =>
+                          setNewWorkRequest({
+                            ...newWorkRequest,
+                            description: e.target.value,
+                          })
+                        }
+                        placeholder="Describe the maintenance issue or work needed"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cost">Cost</Label>
+                      <Input
+                        id="cost"
+                        type="number"
+                        value={newWorkRequest.cost || ""}
+                        onChange={(e) =>
+                          setNewWorkRequest({
+                            ...newWorkRequest,
+                            cost: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleAddWorkRequest} className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Work Request
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Documents Tab */}
+        <TabsContent value="documents" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Documents</CardTitle>
+              <CardDescription>
+                Upload and manage property documents (insurance, tax bills,
+                mortgage agreements)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">
+                  Document Management
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Upload PDFs for insurance policies, tax bills, and mortgage
+                  agreements
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Document
+                  </Button>
+                  <Button variant="outline">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Link External Document
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  Note: Document upload functionality will be implemented with
+                  file storage integration (e.g., Supabase Storage, AWS S3)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+

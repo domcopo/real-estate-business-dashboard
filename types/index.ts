@@ -35,13 +35,40 @@ export interface Subscription {
   website?: string
 }
 
+export interface RentRollUnit {
+  unitName: string
+  tenantName: string
+  monthlyRent: number
+  leaseStart: string
+  leaseEnd: string
+  securityDeposit: number
+}
+
+export interface WorkRequest {
+  id: string
+  dateLogged: string
+  description: string
+  status: "new" | "in_progress" | "completed"
+  cost: number
+}
+
 export interface Property {
   id: string
   address: string
   type: string
-  status: "Active" | "Rented" | "Sold" | "Maintenance"
-  value: number
-  tasks: number
+  status: "rented" | "vacant" | "under_maintenance" | "sold"
+  // Financial fields
+  mortgageHolder?: string
+  purchasePrice: number
+  currentEstValue: number
+  monthlyMortgagePayment: number
+  monthlyInsurance: number
+  monthlyPropertyTax: number
+  monthlyOtherCosts: number
+  monthlyGrossRent: number
+  // Operational fields
+  rentRoll?: RentRollUnit[]
+  workRequests?: WorkRequest[]
   linkedWebsites?: string[]
 }
 

@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { GoHighLevelButton } from "@/components/layout/gohighlevel-button"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 
 export default function DashboardLayout({
   children,
@@ -13,6 +13,18 @@ export default function DashboardLayout({
 }) {
   const { isLoaded, isSignedIn } = useUser()
   const router = useRouter()
+  const [loadingTimeout, setLoadingTimeout] = useState(false)
+
+  // Show timeout message if Clerk takes too long (likely misconfigured)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoaded) {
+        setLoadingTimeout(true)
+      }
+    }, 5000) // 5 second timeout
+
+    return () => clearTimeout(timer)
+  }, [isLoaded])
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -23,7 +35,25 @@ export default function DashboardLayout({
   if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <div className="text-muted-foreground">
+            {loadingTimeout ? (
+              <div className="space-y-2">
+                <p>Loading is taking longer than expected...</p>
+                <p className="text-sm">Make sure Clerk is configured in .env.local</p>
+                <button
+                  onClick={() => router.push("/sign-in")}
+                  className="text-primary hover:underline text-sm"
+                >
+                  Go to Sign In →
+                </button>
+              </div>
+            ) : (
+              "Loading..."
+            )}
+          </div>
+        </div>
       </div>
     )
   }
