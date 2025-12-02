@@ -174,7 +174,7 @@ export function InvitationPrompt() {
               <DialogTitle>Workspace Invitation</DialogTitle>
             </div>
             <DialogDescription>
-              You've been invited to join <strong>{workspaceName}</strong>
+              You&apos;ve been invited to join <strong>{workspaceName}</strong>
             </DialogDescription>
           </DialogHeader>
 

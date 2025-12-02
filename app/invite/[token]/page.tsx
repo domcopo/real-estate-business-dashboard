@@ -247,7 +247,7 @@ export default function InvitePage() {
             <CardTitle>Workspace Invitation</CardTitle>
           </div>
           <CardDescription>
-            You've been invited to join a workspace
+            You&apos;ve been invited to join a workspace
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

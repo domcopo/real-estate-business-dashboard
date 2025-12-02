@@ -82,6 +82,7 @@ export function TeamManagement({ workspaceId }: TeamManagementProps) {
       setLoading(false)
     }
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId])
 
   const handleInvite = async () => {
