@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getOrCreateUserWorkspace, getUserWorkspaces } from '@/lib/workspace-helpers'
 
 /**
- * GET /api/subscriptions - Fetch user's subscriptions
+ * GET /api/subscriptions - Fetch workspace subscriptions
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +24,14 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get user's workspaces
+    const workspaces = await getUserWorkspaces(userId)
+    const workspaceIds = workspaces.map(w => w.id)
+
     const { data, error } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
-      .eq('user_id', userId)
+      .in('workspace_id', workspaceIds)
       .order('renewal_date', { ascending: true })
 
     if (error) {
@@ -78,11 +83,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Delete existing subscriptions for this user
+    // Get or create workspace
+    const workspace = await getOrCreateUserWorkspace(userId)
+    const targetWorkspaceId = workspaceId || workspace.id
+
+    // Delete existing subscriptions for this workspace
     const { error: deleteError } = await supabaseAdmin
       .from('subscriptions')
       .delete()
-      .eq('user_id', userId)
+      .eq('workspace_id', targetWorkspaceId)
 
     if (deleteError) {
       console.error('Error deleting existing subscriptions:', deleteError)
@@ -92,7 +101,7 @@ export async function POST(request: NextRequest) {
     // Insert new subscriptions
     const subscriptionsToInsert = subscriptions.map((sub: any) => ({
       user_id: userId,
-      workspace_id: workspaceId || null,
+      workspace_id: targetWorkspaceId,
       name: sub.name,
       cost: sub.cost || 0,
       period: sub.period,

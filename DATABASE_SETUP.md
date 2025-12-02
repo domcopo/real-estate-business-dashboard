@@ -215,3 +215,8 @@ Visit `http://localhost:3000/api/test-db` to test.
 - [Row Level Security Guide](https://supabase.com/docs/guides/auth/row-level-security)
 - [Supabase TypeScript Types](https://supabase.com/docs/guides/api/generating-types)
 
+
+
+
+
+

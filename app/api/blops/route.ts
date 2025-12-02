@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getOrCreateUserWorkspace, getUserWorkspaces } from '@/lib/workspace-helpers'
 
 /**
- * GET /api/blops - Fetch user's blops
+ * GET /api/blops - Fetch workspace blops
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +24,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get user's workspace
+    const workspace = await getOrCreateUserWorkspace(userId)
+    
+    // Get all workspaces user has access to
+    const workspaces = await getUserWorkspaces(userId)
+    const workspaceIds = workspaces.map(w => w.id)
+
     const { data, error } = await supabaseAdmin
       .from('blops')
       .select('*')
-      .eq('user_id', userId)
+      .in('workspace_id', workspaceIds)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -78,11 +86,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Delete existing blops for this user
+    // Get or create workspace
+    const workspace = await getOrCreateUserWorkspace(userId)
+    const targetWorkspaceId = workspaceId || workspace.id
+
+    // Delete existing blops for this workspace
     const { error: deleteError } = await supabaseAdmin
       .from('blops')
       .delete()
-      .eq('user_id', userId)
+      .eq('workspace_id', targetWorkspaceId)
 
     if (deleteError) {
       console.error('Error deleting existing blops:', deleteError)
@@ -92,7 +104,7 @@ export async function POST(request: NextRequest) {
     // Insert new blops
     const blopsToInsert = blops.map((blop: any) => ({
       user_id: userId,
-      workspace_id: workspaceId || null,
+      workspace_id: targetWorkspaceId,
       x: blop.x,
       y: blop.y,
       shape: blop.shape,

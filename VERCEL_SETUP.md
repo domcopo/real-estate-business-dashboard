@@ -64,3 +64,8 @@ You should see a JSON response indicating:
 - Verify the Supabase URL and keys are correct
 - Make sure your database schema was run successfully
 
+
+
+
+
+

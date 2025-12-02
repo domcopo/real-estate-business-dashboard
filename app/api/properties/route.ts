@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getOrCreateUserWorkspace, getUserWorkspaces } from '@/lib/workspace-helpers'
 
 /**
- * GET /api/properties - Fetch user's properties
+ * GET /api/properties - Fetch workspace properties
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +24,14 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get user's workspaces
+    const workspaces = await getUserWorkspaces(userId)
+    const workspaceIds = workspaces.map(w => w.id)
+
     const { data, error } = await supabaseAdmin
       .from('properties')
       .select('*')
-      .eq('user_id', userId)
+      .in('workspace_id', workspaceIds)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -87,11 +92,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Delete existing properties for this user
+    // Get or create workspace
+    const workspace = await getOrCreateUserWorkspace(userId)
+    const targetWorkspaceId = workspaceId || workspace.id
+
+    // Delete existing properties for this workspace
     const { error: deleteError } = await supabaseAdmin
       .from('properties')
       .delete()
-      .eq('user_id', userId)
+      .eq('workspace_id', targetWorkspaceId)
 
     if (deleteError) {
       console.error('Error deleting existing properties:', deleteError)
@@ -114,7 +123,7 @@ export async function POST(request: NextRequest) {
       // Build the property object, excluding fields that don't belong in the properties table
       const propertyToInsert: any = {
         user_id: userId,
-        workspace_id: workspaceId || null,
+        workspace_id: targetWorkspaceId,
         address: String(prop.address).trim(),
         type: String(prop.type).trim(),
         status: String(prop.status).trim(),

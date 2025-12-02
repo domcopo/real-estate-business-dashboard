@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getOrCreateUserWorkspace, getUserWorkspaces } from '@/lib/workspace-helpers'
 
 /**
- * GET /api/websites - Fetch user's websites
+ * GET /api/websites - Fetch workspace websites
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +24,14 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get user's workspaces
+    const workspaces = await getUserWorkspaces(userId)
+    const workspaceIds = workspaces.map(w => w.id)
+
     const { data, error } = await supabaseAdmin
       .from('websites')
       .select('*')
-      .eq('user_id', userId)
+      .in('workspace_id', workspaceIds)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -78,11 +83,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Delete existing websites for this user
+    // Get or create workspace
+    const workspace = await getOrCreateUserWorkspace(userId)
+    const targetWorkspaceId = workspaceId || workspace.id
+
+    // Delete existing websites for this workspace
     const { error: deleteError } = await supabaseAdmin
       .from('websites')
       .delete()
-      .eq('user_id', userId)
+      .eq('workspace_id', targetWorkspaceId)
 
     if (deleteError) {
       console.error('Error deleting existing websites:', deleteError)
@@ -92,7 +101,7 @@ export async function POST(request: NextRequest) {
     // Insert new websites
     const websitesToInsert = websites.map((site: any) => ({
       user_id: userId,
-      workspace_id: workspaceId || null,
+      workspace_id: targetWorkspaceId,
       url: site.url,
       name: site.name,
       tech_stack: site.techStack || {},

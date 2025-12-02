@@ -6,11 +6,31 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState } from "react"
+import { TeamManagement } from "@/components/team/team-management"
+import { useState, useEffect } from "react"
 
 export default function SettingsPage() {
   const [theme, setTheme] = useState("light")
   const [snapToGrid, setSnapToGrid] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadWorkspace() {
+      try {
+        const response = await fetch('/api/workspace')
+        if (response.ok) {
+          const data = await response.json()
+          setWorkspaceId(data.workspace?.id || null)
+        }
+      } catch (error) {
+        console.error('Failed to load workspace:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadWorkspace()
+  }, [])
 
   return (
     <div className="p-8 space-y-8">
@@ -24,11 +44,30 @@ export default function SettingsPage() {
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="ui">UI & Themes</TabsTrigger>
           <TabsTrigger value="flexboard">Flexboard</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="team" className="space-y-4">
+          {loading ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="text-muted-foreground">Loading team settings...</div>
+              </CardContent>
+            </Card>
+          ) : workspaceId ? (
+            <TeamManagement workspaceId={workspaceId} />
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="text-muted-foreground">Failed to load workspace</div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         <TabsContent value="general" className="space-y-4">
           <Card>
