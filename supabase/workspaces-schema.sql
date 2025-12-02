@@ -60,6 +60,20 @@ ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (to avoid errors on re-run)
+DROP POLICY IF EXISTS "Users can view their workspaces" ON workspaces;
+DROP POLICY IF EXISTS "Users can create workspaces" ON workspaces;
+DROP POLICY IF EXISTS "Owners can update their workspaces" ON workspaces;
+DROP POLICY IF EXISTS "Owners can delete their workspaces" ON workspaces;
+DROP POLICY IF EXISTS "Users can view members of their workspaces" ON workspace_members;
+DROP POLICY IF EXISTS "Owners and admins can add members" ON workspace_members;
+DROP POLICY IF EXISTS "Owners and admins can update members" ON workspace_members;
+DROP POLICY IF EXISTS "Owners and admins can remove members" ON workspace_members;
+DROP POLICY IF EXISTS "Users can view invitations for their workspaces" ON invitations;
+DROP POLICY IF EXISTS "Owners and admins can create invitations" ON invitations;
+DROP POLICY IF EXISTS "Owners and admins can update invitations" ON invitations;
+DROP POLICY IF EXISTS "Owners and admins can delete invitations" ON invitations;
+
 -- Workspaces policies: Users can view workspaces they own or are members of
 CREATE POLICY "Users can view their workspaces"
   ON workspaces FOR SELECT
@@ -186,6 +200,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop trigger if it exists (to avoid errors on re-run)
+DROP TRIGGER IF EXISTS update_workspaces_updated_at ON workspaces;
 
 CREATE TRIGGER update_workspaces_updated_at BEFORE UPDATE ON workspaces
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
