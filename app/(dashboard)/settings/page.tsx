@@ -26,7 +26,13 @@ export default function SettingsPage() {
         setWorkspaceId(data.workspace?.id || null)
       } else {
         const errorData = await response.json().catch(() => ({}))
-        setError(errorData.error || 'Failed to load workspace')
+        const errorMessage = errorData.details || errorData.error || 'Failed to load workspace'
+        setError(errorMessage)
+        
+        // Check if it's a table doesn't exist error
+        if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+          setError('Database tables not found. Please run the workspace schema migration in Supabase.')
+        }
       }
     } catch (error: any) {
       console.error('Failed to load workspace:', error)
@@ -106,18 +112,34 @@ export default function SettingsPage() {
               <CardContent className="p-8 text-center space-y-4">
                 <div className="text-muted-foreground">
                   {error ? (
-                    <p>Unable to load your workspace. This might be because:</p>
+                    <div className="space-y-2">
+                      <p className="font-semibold text-red-600">Error: {error}</p>
+                      {error.includes('relation') || error.includes('does not exist') ? (
+                        <div className="text-sm space-y-2 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="font-semibold text-yellow-900">Database Setup Required:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-yellow-800 text-left">
+                            <li>Go to your Supabase Dashboard → SQL Editor</li>
+                            <li>Open the file: <code className="bg-yellow-100 px-1 rounded">supabase/workspaces-schema.sql</code></li>
+                            <li>Copy and paste the entire SQL script</li>
+                            <li>Click &quot;Run&quot; to execute it</li>
+                            <li>Refresh this page</li>
+                          </ol>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground space-y-2 mt-2">
+                          <p>This might be because:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li>The database might not be set up correctly</li>
+                            <li>The workspace tables might not exist</li>
+                            <li>There might be a connection issue</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <p>You don&apos;t have a workspace yet. Create one to start inviting team members.</p>
                   )}
                 </div>
-                {error && (
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>• The database might not be set up correctly</p>
-                    <p>• The workspace tables might not exist</p>
-                    <p>• There might be a connection issue</p>
-                  </div>
-                )}
                 <Button 
                   onClick={createWorkspace} 
                   disabled={creating}
