@@ -6,11 +6,88 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState } from "react"
+import { TeamManagement } from "@/components/team/team-management"
+import { useState, useEffect } from "react"
 
 export default function SettingsPage() {
   const [theme, setTheme] = useState("light")
   const [snapToGrid, setSnapToGrid] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const loadWorkspace = async () => {
+    try {
+      setError(null)
+      setLoading(true)
+      const response = await fetch('/api/workspace')
+      const data = await response.json().catch(() => ({}))
+      
+      if (response.ok) {
+        if (data.workspace?.id) {
+          setWorkspaceId(data.workspace.id)
+          setError(null)
+        } else {
+          setError('Workspace was created but ID is missing. Please refresh the page.')
+        }
+      } else {
+        const errorMessage = data.details || data.error || 'Failed to load workspace'
+        setError(errorMessage)
+        
+        // Check if it's a table doesn't exist error
+        if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+          setError('Database tables not found. Please run the workspace schema migration in Supabase.')
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to load workspace:', error)
+      setError(error.message || 'Failed to load workspace')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const createWorkspace = async () => {
+    setCreating(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/workspace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'My Workspace' }),
+      })
+      
+      const data = await response.json().catch(() => ({}))
+      
+      if (response.ok) {
+        if (data.workspace?.id) {
+          setWorkspaceId(data.workspace.id)
+          setError(null)
+          // Reload to show the team management UI
+          setTimeout(() => {
+            window.location.reload()
+          }, 500)
+        } else {
+          setError('Workspace was created but ID is missing. Please refresh the page.')
+        }
+      } else {
+        const errorMessage = data.details || data.error || 'Failed to create workspace'
+        setError(errorMessage)
+      }
+    } catch (error: any) {
+      console.error('Failed to create workspace:', error)
+      setError(error.message || 'Failed to create workspace')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  useEffect(() => {
+    loadWorkspace()
+  }, [])
 
   return (
     <div className="p-8 space-y-8">
@@ -24,11 +101,84 @@ export default function SettingsPage() {
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="ui">UI & Themes</TabsTrigger>
           <TabsTrigger value="flexboard">Flexboard</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="team" className="space-y-4">
+          {loading ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="text-muted-foreground">Loading team settings...</div>
+              </CardContent>
+            </Card>
+          ) : workspaceId ? (
+            <TeamManagement workspaceId={workspaceId} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Team Management</CardTitle>
+                <CardDescription>
+                  {error || 'Workspace not found'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 text-center space-y-4">
+                <div className="text-muted-foreground">
+                  {error ? (
+                    <div className="space-y-2">
+                      <p className="font-semibold text-red-600">Error: {error}</p>
+                      {error.includes('relation') || error.includes('does not exist') ? (
+                        <div className="text-sm space-y-2 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="font-semibold text-yellow-900">Database Setup Required:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-yellow-800 text-left">
+                            <li>Go to your Supabase Dashboard → SQL Editor</li>
+                            <li>Open the file: <code className="bg-yellow-100 px-1 rounded">supabase/workspaces-schema.sql</code></li>
+                            <li>Copy and paste the entire SQL script</li>
+                            <li>Click &quot;Run&quot; to execute it</li>
+                            <li>Refresh this page</li>
+                          </ol>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground space-y-2 mt-2">
+                          <p>This might be because:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li>The database might not be set up correctly</li>
+                            <li>The workspace tables might not exist</li>
+                            <li>There might be a connection issue</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p>You don&apos;t have a workspace yet. Create one to start inviting team members.</p>
+                  )}
+                </div>
+                <Button 
+                  onClick={createWorkspace} 
+                  disabled={creating}
+                  className="mt-4"
+                >
+                  {creating ? 'Creating...' : 'Create Workspace'}
+                </Button>
+                <div className="text-xs text-muted-foreground mt-4 pt-4 border-t">
+                  <p className="font-semibold mb-2">How to invite team members:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-left max-w-md mx-auto">
+                    <li>Create a workspace (click button above)</li>
+                    <li>Enter your teammate&apos;s email address</li>
+                    <li>They&apos;ll receive an invitation</li>
+                    <li>When they sign up with that email, they&apos;ll be prompted to join</li>
+                  </ol>
+                  <p className="mt-2 text-left max-w-md mx-auto">
+                    <strong>Note:</strong> Teammates use the same sign-in system (Clerk) - they sign up with their email and password, no separate accounts needed!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         <TabsContent value="general" className="space-y-4">
           <Card>

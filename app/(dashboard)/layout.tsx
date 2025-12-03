@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/layout/sidebar"
 import { GoHighLevelButton } from "@/components/layout/gohighlevel-button"
+import { InvitationPrompt } from "@/components/team/invitation-prompt"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -91,6 +92,9 @@ export default function DashboardLayout({
       </main>
       
       <GoHighLevelButton />
+      
+      {/* Invitation Prompt - shows when user has pending invitations */}
+      <InvitationPrompt />
     </div>
   )
 }

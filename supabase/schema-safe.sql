@@ -445,3 +445,9 @@ CREATE TRIGGER update_agency_clients_updated_at BEFORE UPDATE ON agency_clients
 CREATE TRIGGER update_ghl_clients_updated_at BEFORE UPDATE ON ghl_clients
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+
+
+
+
+
+

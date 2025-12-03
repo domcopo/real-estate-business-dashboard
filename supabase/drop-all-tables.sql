@@ -19,3 +19,9 @@ DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 -- Note: This will also drop all indexes, triggers, and RLS policies automatically
 -- due to CASCADE
 
+
+
+
+
+
+

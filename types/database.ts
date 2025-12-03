@@ -416,3 +416,9 @@ export type AgencyClientRow = Database['public']['Tables']['agency_clients']['Ro
 export type GHLClientRow = Database['public']['Tables']['ghl_clients']['Row']
 export type GHLWeeklyMetricRow = Database['public']['Tables']['ghl_weekly_metrics']['Row']
 
+
+
+
+
+
+

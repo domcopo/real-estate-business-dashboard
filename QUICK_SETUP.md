@@ -65,3 +65,9 @@ Once everything is working:
 - Use the helper functions in `lib/db-helpers.ts` in your API routes
 - See examples in the database setup guide
 
+
+
+
+
+
+

@@ -69,3 +69,53 @@ export async function PUT(
   }
 }
 
+/**
+ * DELETE /api/properties/[id] - Delete a single property
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      )
+    }
+
+    const propertyId = params.id
+
+    const { error } = await supabaseAdmin
+      .from('properties')
+      .delete()
+      .eq('id', propertyId)
+      .eq('user_id', userId) // Ensure user owns the property
+
+    if (error) {
+      console.error('Error deleting property:', error)
+      return NextResponse.json(
+        { error: 'Failed to delete property', details: error.message },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true, message: 'Property deleted successfully' })
+  } catch (error: any) {
+    console.error('Error in DELETE /api/properties/[id]:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', details: error.message },
+      { status: 500 }
+    )
+  }
+}
+
