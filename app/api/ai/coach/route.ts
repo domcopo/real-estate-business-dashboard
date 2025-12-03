@@ -60,8 +60,23 @@ export async function POST(request: Request) {
 
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(geminiApiKey)
-    // Use gemini-pro (stable model name for v1beta API)
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" }) // Trigger rebuild
+    // Try different model names - gemini-1.5-flash is commonly available
+    let model: any
+    const modelNames = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro"]
+    
+    for (const modelName of modelNames) {
+      try {
+        model = genAI.getGenerativeModel({ model: modelName })
+        console.log(`Successfully initialized model: ${modelName}`)
+        break
+      } catch (modelError) {
+        console.warn(`Failed to initialize ${modelName}, trying next...`)
+        if (modelName === modelNames[modelNames.length - 1]) {
+          // Last model failed, throw error
+          throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(", ")}. Error: ${modelError instanceof Error ? modelError.message : String(modelError)}`)
+        }
+      }
+    }
 
     // Get database schema for context
     const dbSchema = getDatabaseSchema()
