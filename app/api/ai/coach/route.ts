@@ -262,17 +262,26 @@ ${dataSummary}
       try {
         const stream = await model.generateContentStream(analysisPrompt)
         
-        // Create a readable stream
+        // Create a readable stream with proper chunking
         const encoder = new TextEncoder()
         const readableStream = new ReadableStream({
           async start(controller) {
             let fullResponse = ""
             try {
+              // Process stream chunks - send immediately as they arrive
               for await (const chunk of stream.stream) {
-                const chunkText = chunk.text()
-                fullResponse += chunkText
-                // Send chunk to client
-                controller.enqueue(encoder.encode(chunkText))
+                try {
+                  const chunkText = chunk.text()
+                  if (chunkText) {
+                    fullResponse += chunkText
+                    // Send each chunk immediately in SSE format
+                    // Use plain text chunks for better compatibility
+                    controller.enqueue(encoder.encode(chunkText))
+                  }
+                } catch (chunkError) {
+                  console.warn("Error processing chunk:", chunkError)
+                  // Continue with next chunk
+                }
               }
               
               // Cache the full response after streaming completes
@@ -284,7 +293,9 @@ ${dataSummary}
               controller.close()
             } catch (streamError) {
               console.error("Streaming error:", streamError)
-              controller.error(streamError)
+              const errorText = `\n\nError: ${streamError instanceof Error ? streamError.message : String(streamError)}`
+              controller.enqueue(encoder.encode(errorText))
+              controller.close()
             }
           },
         })
@@ -294,6 +305,7 @@ ${dataSummary}
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no', // Disable buffering in nginx
           },
         })
       } catch (geminiError: any) {

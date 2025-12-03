@@ -93,7 +93,7 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
       const contentType = response.headers.get("content-type") || ""
       
       if (contentType.includes("text/event-stream")) {
-        // Handle streaming response
+        // Handle streaming response - plain text chunks
         const reader = response.body?.getReader()
         const decoder = new TextDecoder()
         let accumulatedText = ""
@@ -106,18 +106,21 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
           const { done, value } = await reader.read()
           if (done) break
 
+          // Decode chunk and append immediately
           const chunk = decoder.decode(value, { stream: true })
-          accumulatedText += chunk
-
-          // Update the assistant message in real-time
-          setMessages((prev) => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === "assistant") {
-              lastMessage.content = accumulatedText
-            }
-            return newMessages
-          })
+          if (chunk) {
+            accumulatedText += chunk
+            
+            // Update the assistant message in real-time with each chunk
+            setMessages((prev) => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage && lastMessage.role === "assistant") {
+                lastMessage.content = accumulatedText
+              }
+              return newMessages
+            })
+          }
         }
       } else {
         // Handle non-streaming JSON response (fallback or cached)
