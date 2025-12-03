@@ -34,10 +34,17 @@ export async function POST(request: Request) {
     // Check for Gemini API key
     const geminiApiKey = process.env.GEMINI_API_KEY
     if (!geminiApiKey) {
+      console.error("GEMINI_API_KEY is missing from environment variables")
       return NextResponse.json(
-        { error: "Gemini API key not configured. Please set GEMINI_API_KEY in your environment variables." },
+        { error: "Gemini API key not configured. Please set GEMINI_API_KEY in your Vercel environment variables." },
         { status: 500 }
       )
+    }
+
+    // Check for database URL (optional but recommended)
+    const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL
+    if (!databaseUrl) {
+      console.warn("DATABASE_URL is missing - AI Coach will work but won't be able to query the database")
     }
 
     // Parse request body
@@ -181,8 +188,22 @@ Provide helpful guidance based on the question. Be practical, concise, and actio
     })
   } catch (error) {
     console.error("AI Coach API error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    // Log full error details for debugging
+    console.error("Error details:", {
+      message: errorMessage,
+      stack: errorStack,
+      geminiApiKey: process.env.GEMINI_API_KEY ? "Set" : "Missing",
+      databaseUrl: process.env.DATABASE_URL ? "Set" : "Missing",
+    })
+    
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
+      { 
+        error: errorMessage || "Internal server error",
+        details: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     )
   }
