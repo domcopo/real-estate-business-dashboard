@@ -117,13 +117,37 @@ Return the SQL query in this JSON format:
 
     try {
       // Generate SQL using Gemini
-      let sqlResponse: string
+      let sqlResponse: string = ""
       try {
         const sqlResult = await model.generateContent(sqlGenerationPrompt)
         sqlResponse = sqlResult.response.text()
-      } catch (geminiError) {
+      } catch (geminiError: any) {
         console.error("Gemini API error:", geminiError)
-        throw new Error(`Failed to generate SQL query: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`)
+        // Check if it's a 404 model not found error - try different model
+        const errorMsg = geminiError?.message || String(geminiError)
+        if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+          console.log("Model not found, trying alternative models...")
+          // Try alternative models
+          const altModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+          let worked = false
+          for (const altModelName of altModels) {
+            try {
+              const altModel = genAI.getGenerativeModel({ model: altModelName })
+              const altResult = await altModel.generateContent(sqlGenerationPrompt)
+              sqlResponse = altResult.response.text()
+              console.log(`Successfully used alternative model: ${altModelName}`)
+              worked = true
+              break
+            } catch (altError) {
+              console.warn(`Alternative model ${altModelName} also failed`)
+            }
+          }
+          if (!worked || !sqlResponse) {
+            throw new Error(`All Gemini models failed. Please check your API key and available models. Original error: ${errorMsg}`)
+          }
+        } else {
+          throw new Error(`Failed to generate SQL query: ${errorMsg}`)
+        }
       }
 
       // Parse JSON response to extract SQL
@@ -204,13 +228,37 @@ I wasn't able to query the database for this question, but I can still provide g
 Provide helpful guidance based on the question. Be practical, concise, and actionable. Use markdown formatting for readability.`
 
     // Generate final response
-    let reply: string
+    let reply: string = ""
     try {
       const analysisResult = await model.generateContent(analysisPrompt)
       reply = analysisResult.response.text()
-    } catch (geminiError) {
+    } catch (geminiError: any) {
       console.error("Gemini analysis error:", geminiError)
-      throw new Error(`Failed to generate analysis: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`)
+      // Check if it's a 404 model not found error - try different model
+      const errorMsg = geminiError?.message || String(geminiError)
+      if (errorMsg.includes("404") || errorMsg.includes("not found")) {
+        console.log("Model not found for analysis, trying alternative models...")
+        // Try alternative models
+        const altModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+        let worked = false
+        for (const altModelName of altModels) {
+          try {
+            const altModel = genAI.getGenerativeModel({ model: altModelName })
+            const altResult = await altModel.generateContent(analysisPrompt)
+            reply = altResult.response.text()
+            console.log(`Successfully used alternative model for analysis: ${altModelName}`)
+            worked = true
+            break
+          } catch (altError) {
+            console.warn(`Alternative model ${altModelName} also failed for analysis`)
+          }
+        }
+        if (!worked || !reply) {
+          throw new Error(`All Gemini models failed for analysis. Please check your API key and available models. Original error: ${errorMsg}`)
+        }
+      } else {
+        throw new Error(`Failed to generate analysis: ${errorMsg}`)
+      }
     }
 
     return NextResponse.json({
