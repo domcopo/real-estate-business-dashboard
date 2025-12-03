@@ -60,22 +60,32 @@ export async function POST(request: Request) {
 
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(geminiApiKey)
-    // Try different model names - gemini-1.5-flash is commonly available
+    // Use gemini-1.5-flash (commonly available and fast) or fallback to others
+    // Note: Model availability depends on API version and region
     let model: any
-    const modelNames = ["gemini-1.5-flash", "gemini-pro", "gemini-1.5-pro"]
+    const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
     
+    let lastError: Error | null = null
     for (const modelName of modelNames) {
       try {
         model = genAI.getGenerativeModel({ model: modelName })
-        console.log(`Successfully initialized model: ${modelName}`)
-        break
+        // Test if model actually works by checking if it's initialized
+        if (model) {
+          console.log(`Using Gemini model: ${modelName}`)
+          break
+        }
       } catch (modelError) {
-        console.warn(`Failed to initialize ${modelName}, trying next...`)
+        lastError = modelError instanceof Error ? modelError : new Error(String(modelError))
+        console.warn(`Model ${modelName} failed:`, lastError.message)
         if (modelName === modelNames[modelNames.length - 1]) {
-          // Last model failed, throw error
-          throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(", ")}. Error: ${modelError instanceof Error ? modelError.message : String(modelError)}`)
+          // All models failed
+          throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(", ")}. Last error: ${lastError.message}. Please check your API key and available models.`)
         }
       }
+    }
+    
+    if (!model) {
+      throw new Error(`Could not initialize any Gemini model. Last error: ${lastError?.message || "Unknown error"}`)
     }
 
     // Get database schema for context
