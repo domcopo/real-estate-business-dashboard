@@ -60,33 +60,32 @@ export async function POST(request: Request) {
 
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(geminiApiKey)
-    // Use gemini-1.5-flash (commonly available and fast) or fallback to others
-    // Note: Model availability depends on API version and region
-    let model: any
-    const modelNames = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
     
-    let lastError: Error | null = null
-    for (const modelName of modelNames) {
-      try {
-        model = genAI.getGenerativeModel({ model: modelName })
-        // Test if model actually works by checking if it's initialized
-        if (model) {
-          console.log(`Using Gemini model: ${modelName}`)
-          break
-        }
-      } catch (modelError) {
-        lastError = modelError instanceof Error ? modelError : new Error(String(modelError))
-        console.warn(`Model ${modelName} failed:`, lastError.message)
-        if (modelName === modelNames[modelNames.length - 1]) {
-          // All models failed
-          throw new Error(`Failed to initialize any Gemini model. Tried: ${modelNames.join(", ")}. Last error: ${lastError.message}. Please check your API key and available models.`)
+    // Try to fetch available models first using REST API
+    let availableModel: string | null = null
+    try {
+      const modelsResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`)
+      if (modelsResponse.ok) {
+        const modelsData = await modelsResponse.json()
+        const models = modelsData.models || []
+        // Find a model that supports generateContent
+        const generateContentModel = models.find((m: any) => 
+          m.supportedGenerationMethods?.includes('generateContent') || 
+          m.supportedGenerationMethods?.includes('GENERATE_CONTENT')
+        )
+        if (generateContentModel) {
+          availableModel = generateContentModel.name.replace('models/', '')
+          console.log(`Found available model: ${availableModel}`)
         }
       }
+    } catch (listError) {
+      console.warn("Could not list models, will try default:", listError)
     }
     
-    if (!model) {
-      throw new Error(`Could not initialize any Gemini model. Last error: ${lastError?.message || "Unknown error"}`)
-    }
+    // Use available model or fallback to common names
+    const modelName = availableModel || "gemini-pro"
+    const model = genAI.getGenerativeModel({ model: modelName })
+    console.log(`Using Gemini model: ${modelName}`)
 
     // Get database schema for context
     const dbSchema = getDatabaseSchema()
@@ -127,8 +126,15 @@ Return the SQL query in this JSON format:
         const errorMsg = geminiError?.message || String(geminiError)
         if (errorMsg.includes("404") || errorMsg.includes("not found")) {
           console.log("Model not found, trying alternative models...")
-          // Try alternative models
-          const altModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+          // Try alternative models (with and without models/ prefix)
+          const altModels = [
+            "models/gemini-pro",
+            "gemini-pro", 
+            "models/gemini-1.5-flash",
+            "gemini-1.5-flash",
+            "models/gemini-1.5-pro",
+            "gemini-1.5-pro"
+          ]
           let worked = false
           for (const altModelName of altModels) {
             try {
@@ -238,8 +244,15 @@ Provide helpful guidance based on the question. Be practical, concise, and actio
       const errorMsg = geminiError?.message || String(geminiError)
       if (errorMsg.includes("404") || errorMsg.includes("not found")) {
         console.log("Model not found for analysis, trying alternative models...")
-        // Try alternative models
-        const altModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+          // Try alternative models (with and without models/ prefix)
+          const altModels = [
+            "models/gemini-pro",
+            "gemini-pro", 
+            "models/gemini-1.5-flash",
+            "gemini-1.5-flash",
+            "models/gemini-1.5-pro",
+            "gemini-1.5-pro"
+          ]
         let worked = false
         for (const altModelName of altModels) {
           try {
