@@ -451,3 +451,8 @@ CREATE TRIGGER update_ghl_clients_updated_at BEFORE UPDATE ON ghl_clients
 
 
 
+
+
+
+
+

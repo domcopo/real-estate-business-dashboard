@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server"
 import { currentUser } from "@clerk/nextjs/server"
+import { GoogleGenerativeAI } from "@google/generative-ai"
+import { runSupabaseQuery } from "@/lib/database"
+import { getDatabaseSchema } from "@/lib/database-schema"
 import { AI_COACH_SYSTEM_PROMPT } from "@/lib/ai-coach/system-prompt"
-import { BusinessContext } from "@/lib/ai-coach/context-builder"
 
 /**
  * POST /api/ai/coach
  * 
- * Protected API route for AI Coach chat
+ * Protected API route for AI Coach chat with database query capabilities
  * Requires authentication via Clerk
+ * 
+ * Flow:
+ * 1. User asks a question
+ * 2. Gemini generates SQL query based on question and schema
+ * 3. Execute SQL via Supabase
+ * 4. Gemini analyzes results and provides insights
  * 
  * Body:
  * - message: string - User's question or message
- * - context: BusinessContext - Business data summary (optional, can be fetched server-side)
  */
 export async function POST(request: Request) {
   try {
@@ -24,18 +31,18 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check for OpenAI API key
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
+    // Check for Gemini API key
+    const geminiApiKey = process.env.GEMINI_API_KEY
+    if (!geminiApiKey) {
       return NextResponse.json(
-        { error: "OpenAI API key not configured" },
+        { error: "Gemini API key not configured. Please set GEMINI_API_KEY in your environment variables." },
         { status: 500 }
       )
     }
 
     // Parse request body
     const body = await request.json()
-    const { message, context } = body
+    const { message } = body
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -44,56 +51,139 @@ export async function POST(request: Request) {
       )
     }
 
-    // Build user message with context
-    const userMessage = context
-      ? `${message}\n\nBusiness Context:\n${JSON.stringify(context, null, 2)}`
-      : message
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(geminiApiKey)
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
 
-    // Call OpenAI API
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini", // or "gpt-4" for better quality
-        messages: [
-          {
-            role: "system",
-            content: AI_COACH_SYSTEM_PROMPT,
-          },
-          {
-            role: "user",
-            content: userMessage,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    })
+    // Get database schema for context
+    const dbSchema = getDatabaseSchema()
 
-    if (!openaiResponse.ok) {
-      const error = await openaiResponse.json()
-      console.error("OpenAI API error:", error)
-      return NextResponse.json(
-        { error: "Failed to get AI response" },
-        { status: 500 }
-      )
+    // Step 1: Generate SQL query from user question
+    const sqlGenerationPrompt = `You are a PostgreSQL/Supabase SQL expert. Generate a SQL query to answer the user's question.
+
+Database Schema:
+${dbSchema}
+
+User Question: ${message}
+
+Important Rules:
+1. Generate ONLY valid PostgreSQL SQL that is compatible with Supabase
+2. Use ONLY tables and columns that exist in the schema above
+3. Always filter by user_id = '${user.id}' to ensure users only see their own data
+4. Return ONLY the SQL query, no explanations or markdown formatting
+5. For SELECT queries, limit results to a reasonable number (e.g., LIMIT 100)
+6. Use proper PostgreSQL syntax (e.g., use TEXT instead of VARCHAR, use DECIMAL for money)
+
+Return the SQL query in this JSON format:
+{
+  "sql_query": "SELECT ... FROM ... WHERE user_id = '${user.id}' ..."
+}`
+
+    let sqlQuery: string
+    let queryResults: any[] = []
+
+    try {
+      // Generate SQL using Gemini
+      const sqlResult = await model.generateContent(sqlGenerationPrompt)
+      const sqlResponse = sqlResult.response.text()
+
+      // Parse JSON response to extract SQL
+      try {
+        // Try to extract JSON from markdown code blocks if present
+        const jsonMatch = sqlResponse.match(/\{[\s\S]*"sql_query"[\s\S]*\}/)
+        const jsonStr = jsonMatch ? jsonMatch[0] : sqlResponse
+        const parsed = JSON.parse(jsonStr)
+        sqlQuery = parsed.sql_query || parsed.sql || sqlResponse.trim()
+      } catch (parseError) {
+        // If JSON parsing fails, try to extract SQL directly
+        // Remove markdown code blocks if present
+        sqlQuery = sqlResponse
+          .replace(/```sql\n?/g, '')
+          .replace(/```json\n?/g, '')
+          .replace(/```\n?/g, '')
+          .trim()
+        
+        // Try to extract SQL from JSON-like structure
+        const sqlMatch = sqlQuery.match(/"sql_query"\s*:\s*"([^"]+)"/)
+        if (sqlMatch) {
+          sqlQuery = sqlMatch[1].replace(/\\n/g, ' ')
+        }
+      }
+
+      // Ensure user_id filter is present for security
+      if (!sqlQuery.toLowerCase().includes('user_id') && !sqlQuery.toLowerCase().includes('where')) {
+        // Add user_id filter if not present
+        if (sqlQuery.toLowerCase().includes('select')) {
+          sqlQuery = sqlQuery.replace(/FROM\s+(\w+)/i, `FROM $1 WHERE user_id = '${user.id}'`)
+        }
+      } else if (sqlQuery.toLowerCase().includes('where') && !sqlQuery.toLowerCase().includes(`user_id = '${user.id}'`)) {
+        // Add user_id to existing WHERE clause
+        sqlQuery = sqlQuery.replace(/WHERE\s+/i, `WHERE user_id = '${user.id}' AND `)
+      }
+
+      // Step 2: Execute SQL query
+      try {
+        queryResults = await runSupabaseQuery(sqlQuery)
+      } catch (queryError) {
+        console.error("SQL execution error:", queryError)
+        // If SQL execution fails, continue without data
+        queryResults = []
+      }
+
+    } catch (sqlGenError) {
+      console.error("SQL generation error:", sqlGenError)
+      // If SQL generation fails, proceed without database query
+      queryResults = []
     }
 
-    const data = await openaiResponse.json()
-    const reply = data.choices[0]?.message?.content || "I apologize, but I couldn't generate a response."
+    // Step 3: Analyze results and generate insights
+    const analysisPrompt = queryResults.length > 0
+      ? `${AI_COACH_SYSTEM_PROMPT}
+
+I ran a SQL query to answer the user's question, and here are the results:
+
+Original Question: ${message}
+
+Query Results (JSON):
+${JSON.stringify(queryResults, null, 2)}
+
+Database Schema Context:
+${dbSchema}
+
+Based on the query results and the original question, provide:
+1. A clear summary of what the data shows
+2. 3-5 actionable insights for improving their business
+3. Specific recommendations based on the data
+
+Be practical, concise, and actionable. Use markdown formatting for readability.`
+      : `${AI_COACH_SYSTEM_PROMPT}
+
+The user asked: "${message}"
+
+I wasn't able to query the database for this question, but I can still provide general business coaching advice.
+
+Provide helpful guidance based on the question. Be practical, concise, and actionable. Use markdown formatting for readability.`
+
+    // Generate final response
+    const analysisResult = await model.generateContent(analysisPrompt)
+
+    const reply = analysisResult.response.text()
 
     return NextResponse.json({
       reply,
+      // Include query info in development (remove in production for security)
+      ...(process.env.NODE_ENV === 'development' && {
+        debug: {
+          sqlQuery: sqlQuery || 'No SQL generated',
+          resultCount: queryResults.length,
+        },
+      }),
     })
   } catch (error) {
     console.error("AI Coach API error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
 }
-

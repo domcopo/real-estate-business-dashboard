@@ -422,3 +422,8 @@ export type GHLWeeklyMetricRow = Database['public']['Tables']['ghl_weekly_metric
 
 
 
+
+
+
+
+
