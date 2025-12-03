@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { runSupabaseQuery } from "@/lib/database"
 import { getDatabaseSchema } from "@/lib/database-schema"
 import { AI_COACH_SYSTEM_PROMPT } from "@/lib/ai-coach/system-prompt"
+import { getCachedResponse, setCachedResponse } from "@/lib/ai-coach/cache"
 
 /**
  * POST /api/ai/coach
@@ -49,13 +50,31 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json()
-    const { message } = body
+    const { message, stream: useStreaming = true } = body // Default to streaming
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Message is required" },
         { status: 400 }
       )
+    }
+
+    // Check cache first (skip cache if streaming is requested)
+    if (!useStreaming) {
+      const cached = getCachedResponse(user.id, message)
+      if (cached) {
+        console.log("Returning cached response")
+        return NextResponse.json({
+          reply: cached.response,
+          cached: true,
+          ...(process.env.NODE_ENV === 'development' && {
+            debug: {
+              sqlQuery: cached.sqlQuery || 'No SQL generated',
+              resultCount: cached.resultCount || 0,
+            },
+          }),
+        })
+      }
     }
 
     // Initialize Gemini
@@ -237,11 +256,63 @@ ${dataSummary}
 
 **Remember:** Keep it brief and start a conversation, don't write an essay!`
 
-    // Generate final response
+    // Generate final response (streaming or regular)
+    if (useStreaming) {
+      // Streaming response
+      try {
+        const stream = await model.generateContentStream(analysisPrompt)
+        
+        // Create a readable stream
+        const encoder = new TextEncoder()
+        const readableStream = new ReadableStream({
+          async start(controller) {
+            let fullResponse = ""
+            try {
+              for await (const chunk of stream.stream) {
+                const chunkText = chunk.text()
+                fullResponse += chunkText
+                // Send chunk to client
+                controller.enqueue(encoder.encode(chunkText))
+              }
+              
+              // Cache the full response after streaming completes
+              setCachedResponse(user.id, message, fullResponse, {
+                sqlQuery: sqlQuery || undefined,
+                resultCount: queryResults.length,
+              })
+              
+              controller.close()
+            } catch (streamError) {
+              console.error("Streaming error:", streamError)
+              controller.error(streamError)
+            }
+          },
+        })
+
+        return new Response(readableStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        })
+      } catch (geminiError: any) {
+        console.error("Gemini streaming error:", geminiError)
+        // Fallback to non-streaming - continue to regular response below
+      }
+    }
+
+    // Non-streaming response (or fallback)
     let reply: string = ""
     try {
       const analysisResult = await model.generateContent(analysisPrompt)
       reply = analysisResult.response.text()
+      
+      // Cache the response
+      setCachedResponse(user.id, message, reply, {
+        sqlQuery: sqlQuery || undefined,
+        resultCount: queryResults.length,
+      })
     } catch (geminiError: any) {
       console.error("Gemini analysis error:", geminiError)
       // Check if it's a 404 model not found error - try different model
@@ -264,6 +335,13 @@ ${dataSummary}
             const altResult = await altModel.generateContent(analysisPrompt)
             reply = altResult.response.text()
             console.log(`Successfully used alternative model for analysis: ${altModelName}`)
+            
+            // Cache the response
+            setCachedResponse(user.id, message, reply, {
+              sqlQuery: sqlQuery || undefined,
+              resultCount: queryResults.length,
+            })
+            
             worked = true
             break
           } catch (altError) {
@@ -280,6 +358,7 @@ ${dataSummary}
 
     return NextResponse.json({
       reply,
+      cached: false,
       // Include query info in development (remove in production for security)
       ...(process.env.NODE_ENV === 'development' && {
         debug: {

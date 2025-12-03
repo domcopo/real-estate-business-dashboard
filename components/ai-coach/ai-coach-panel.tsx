@@ -59,6 +59,14 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
     setInput("")
     setIsLoading(true)
 
+    // Create placeholder for streaming response
+    const assistantMessageId = Date.now().toString()
+    const assistantMessage: Message = {
+      role: "assistant",
+      content: "",
+    }
+    setMessages((prev) => [...prev, assistantMessage])
+
     try {
       const response = await fetch("/api/ai/coach", {
         method: "POST",
@@ -67,38 +75,81 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
         },
         body: JSON.stringify({
           message: messageText,
-          context: initialContext,
+          stream: true, // Enable streaming
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        // Try to parse error as JSON, fallback to text
+        const errorData = await response.json().catch(async () => {
+          const text = await response.text()
+          return { error: text || "Failed to get AI response" }
+        })
         const errorMsg = errorData.error || errorData.details || "Failed to get AI response"
         throw new Error(errorMsg)
       }
 
-      const data = await response.json()
+      // Check if response is streaming (text/event-stream) or JSON
+      const contentType = response.headers.get("content-type") || ""
       
-      // Check if there's an error in the response
-      if (data.error) {
-        throw new Error(data.error)
-      }
+      if (contentType.includes("text/event-stream")) {
+        // Handle streaming response
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let accumulatedText = ""
 
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.reply || "I apologize, but I couldn't generate a response.",
-      }
+        if (!reader) {
+          throw new Error("No response body")
+        }
 
-      setMessages((prev) => [...prev, assistantMessage])
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          accumulatedText += chunk
+
+          // Update the assistant message in real-time
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === "assistant") {
+              lastMessage.content = accumulatedText
+            }
+            return newMessages
+          })
+        }
+      } else {
+        // Handle non-streaming JSON response (fallback or cached)
+        const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+
+        // Update the assistant message with full response
+        setMessages((prev) => {
+          const newMessages = [...prev]
+          const lastMessage = newMessages[newMessages.length - 1]
+          if (lastMessage.role === "assistant") {
+            lastMessage.content = data.reply || "I apologize, but I couldn't generate a response."
+          }
+          return newMessages
+        })
+      }
     } catch (error) {
       console.error("Error sending message:", error)
-      const errorMessage: Message = {
-        role: "assistant",
-        content: error instanceof Error 
-          ? `Error: ${error.message}` 
-          : "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      // Update the error message
+      setMessages((prev) => {
+        const newMessages = [...prev]
+        const lastMessage = newMessages[newMessages.length - 1]
+        if (lastMessage.role === "assistant") {
+          lastMessage.content = error instanceof Error 
+            ? `Error: ${error.message}` 
+            : "I apologize, but I'm having trouble processing your request right now. Please try again in a moment."
+        }
+        return newMessages
+      })
     } finally {
       setIsLoading(false)
     }
