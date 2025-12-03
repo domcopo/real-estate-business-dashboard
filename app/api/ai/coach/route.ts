@@ -274,15 +274,18 @@ ${dataSummary}
                   const chunkText = chunk.text()
                   if (chunkText) {
                     fullResponse += chunkText
-                    // Send each chunk immediately in SSE format
-                    // Use plain text chunks for better compatibility
+                    // Send each chunk immediately - don't buffer
+                    // Flush immediately to ensure real-time streaming
                     controller.enqueue(encoder.encode(chunkText))
+                    // Force flush (though ReadableStream should handle this)
                   }
                 } catch (chunkError) {
                   console.warn("Error processing chunk:", chunkError)
                   // Continue with next chunk
                 }
               }
+              
+              console.log(`Streaming complete. Total chunks processed. Full response length: ${fullResponse.length}`)
               
               // Cache the full response after streaming completes
               setCachedResponse(user.id, message, fullResponse, {
