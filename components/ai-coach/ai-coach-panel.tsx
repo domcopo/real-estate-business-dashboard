@@ -190,14 +190,43 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
         }
 
         // Update the assistant message with full response
-        setMessages((prev) => {
-          const newMessages = [...prev]
-          const lastMessage = newMessages[newMessages.length - 1]
-          if (lastMessage.role === "assistant") {
-            lastMessage.content = data.reply || "I apologize, but I couldn't generate a response."
+        let replyText = data.reply || "I apologize, but I couldn't generate a response."
+        
+        // Add database info if available (for visibility)
+        if (data.dataInfo && data.dataInfo.hasData) {
+          replyText += `\n\n_📊 Found ${data.dataInfo.resultCount} result(s) in your database_`
+        } else if (data.dataInfo && !data.dataInfo.hasData && data.dataInfo.sqlQuery !== 'No SQL generated') {
+          replyText += `\n\n_💡 Note: I queried your database but didn't find matching data_`
+        }
+        
+        // Simulate typing for non-streaming responses too
+        setIsLoading(false)
+        let typedText = ""
+        const typeResponse = () => {
+          if (typedText.length < replyText.length) {
+            typedText = replyText.slice(0, typedText.length + 1)
+            setMessages((prev) => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage.role === "assistant") {
+                lastMessage.content = typedText
+              }
+              return newMessages
+            })
+            setTimeout(typeResponse, 20) // Type 20ms per character
           }
-          return newMessages
-        })
+        }
+        typeResponse()
+        
+        // Log database info to console for debugging
+        if (data.dataInfo) {
+          console.log("Database Query Info:", {
+            sql: data.dataInfo.sqlQuery,
+            resultCount: data.dataInfo.resultCount,
+            hasData: data.dataInfo.hasData,
+            sampleData: data.dataInfo.sampleData,
+          })
+        }
       }
     } catch (error) {
       console.error("Error sending message:", error)
