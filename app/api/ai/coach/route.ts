@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     // Use gemini-pro (stable model name for v1beta API)
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" }) // Trigger rebuild
 
     // Get database schema for context
     const dbSchema = getDatabaseSchema()
