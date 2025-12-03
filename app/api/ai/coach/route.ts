@@ -91,8 +91,14 @@ Return the SQL query in this JSON format:
 
     try {
       // Generate SQL using Gemini
-      const sqlResult = await model.generateContent(sqlGenerationPrompt)
-      const sqlResponse = sqlResult.response.text()
+      let sqlResponse: string
+      try {
+        const sqlResult = await model.generateContent(sqlGenerationPrompt)
+        sqlResponse = sqlResult.response.text()
+      } catch (geminiError) {
+        console.error("Gemini API error:", geminiError)
+        throw new Error(`Failed to generate SQL query: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`)
+      }
 
       // Parse JSON response to extract SQL
       try {
@@ -172,9 +178,14 @@ I wasn't able to query the database for this question, but I can still provide g
 Provide helpful guidance based on the question. Be practical, concise, and actionable. Use markdown formatting for readability.`
 
     // Generate final response
-    const analysisResult = await model.generateContent(analysisPrompt)
-
-    const reply = analysisResult.response.text()
+    let reply: string
+    try {
+      const analysisResult = await model.generateContent(analysisPrompt)
+      reply = analysisResult.response.text()
+    } catch (geminiError) {
+      console.error("Gemini analysis error:", geminiError)
+      throw new Error(`Failed to generate analysis: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`)
+    }
 
     return NextResponse.json({
       reply,
