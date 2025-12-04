@@ -28,11 +28,11 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center">
       <div className="mx-auto max-w-2xl space-y-8 text-center">
         <h1 className="text-5xl font-bold tracking-tight">
-          Unified Workspace
+          Tenn Men AI
         </h1>
         <p className="text-xl text-muted-foreground">
-          Your personal and business management hub. Organize websites, tools, 
-          subscriptions, properties, and more in one beautiful interface.
+          Elite Real Estate Intelligence Platform. Manage properties, track campaigns, 
+          and grow your real estate business with AI-powered insights.
         </p>
         <div className="flex gap-4 justify-center">
           <Link href="/sign-in">

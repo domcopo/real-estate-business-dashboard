@@ -83,8 +83,34 @@ export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
       )}>
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b px-4">
-        {!collapsed && (
-          <h1 className="text-lg font-semibold">Unified Workspace</h1>
+        {!collapsed ? (
+          <div className="flex items-center gap-3">
+            <Image 
+              src="/tenn-men-logo.png" 
+              alt="Tenn Men AI" 
+              width={40} 
+              height={40} 
+              className="rounded-full"
+              onError={(e) => {
+                // Fallback if image doesn't exist yet
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <h1 className="text-lg font-semibold">Tenn Men AI</h1>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center w-full">
+            <Image 
+              src="/tenn-men-logo.png" 
+              alt="Tenn Men AI" 
+              width={32} 
+              height={32} 
+              className="rounded-full"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          </div>
         )}
         <div className="flex items-center gap-2">
           {/* Mobile close button */}
@@ -162,7 +188,7 @@ export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
       </nav>
 
       {/* User Section */}
-      {!collapsed && user && (
+      {user && (
         <div className="border-t p-4">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -174,14 +200,16 @@ export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
                 </span>
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {user.fullName || user.emailAddresses[0]?.emailAddress}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user.emailAddresses[0]?.emailAddress}
-              </p>
-            </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {user.fullName || "Tenn Men AI User"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user.emailAddresses[0]?.emailAddress}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

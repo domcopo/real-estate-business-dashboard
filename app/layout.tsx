@@ -6,8 +6,8 @@ import { ClerkProvider } from "@clerk/nextjs"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Unified Workspace",
-  description: "Personal and business management hub",
+  title: "Tenn Men AI",
+  description: "Tenn Men AI - Elite Real Estate Intelligence Platform",
   viewport: {
     width: "device-width",
     initialScale: 1,
