@@ -313,6 +313,7 @@ CREATE POLICY "Users can manage rent roll units for their properties"
   );
 
 -- Work requests policies (inherit from property)
+
 CREATE POLICY "Users can view work requests for their properties"
   ON work_requests FOR SELECT
   USING (

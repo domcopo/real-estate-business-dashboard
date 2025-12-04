@@ -59,6 +59,13 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
     setInput("")
     setIsLoading(true)
 
+    // Create placeholder for streaming response with thinking indicator
+    const assistantMessage: Message = {
+      role: "assistant",
+      content: "Thinking...", // Show thinking immediately
+    }
+    setMessages((prev) => [...prev, assistantMessage])
+
     try {
       const response = await fetch("/api/ai/coach", {
         method: "POST",
@@ -67,28 +74,173 @@ export function AiCoachPanel({ initialContext, quickActions = DEFAULT_QUICK_ACTI
         },
         body: JSON.stringify({
           message: messageText,
-          context: initialContext,
+          stream: true, // Enable streaming
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to get AI response")
+        // Try to parse error as JSON, fallback to text
+        const errorData = await response.json().catch(async () => {
+          const text = await response.text()
+          return { error: text || "Failed to get AI response" }
+        })
+        const errorMsg = errorData.error || errorData.details || "Failed to get AI response"
+        throw new Error(errorMsg)
       }
 
-      const data = await response.json()
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.reply,
-      }
+      // Check if response is streaming (text/plain or text/event-stream) or JSON
+      const contentType = response.headers.get("content-type") || ""
+      
+      if (contentType.includes("text/plain") || contentType.includes("text/event-stream")) {
+        // Handle streaming response - plain text chunks with typing simulation
+        setIsLoading(false) // Stop loading indicator once streaming starts
+        
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let fullText = ""
+        let displayedText = ""
+        let hasReceivedFirstChunk = false
+        let typingTimeout: NodeJS.Timeout | null = null
 
-      setMessages((prev) => [...prev, assistantMessage])
+        if (!reader) {
+          throw new Error("No response body")
+        }
+
+        // Typing simulation - add characters one at a time
+        const typeNextChar = () => {
+          if (displayedText.length < fullText.length) {
+            displayedText = fullText.slice(0, displayedText.length + 1)
+            
+            setMessages((prev) => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage && lastMessage.role === "assistant") {
+                lastMessage.content = displayedText
+              }
+              return newMessages
+            })
+            
+            // Schedule next character (faster typing - 15-25ms per char)
+            const nextChar = fullText[displayedText.length]
+            const delay = nextChar && /[\s.,!?]/.test(nextChar) ? 15 : 20
+            typingTimeout = setTimeout(typeNextChar, delay)
+          }
+        }
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          // Decode chunk and append to full text
+          const chunk = decoder.decode(value, { stream: true })
+          if (chunk) {
+            // Replace "Thinking..." with first chunk, then append subsequent chunks
+            if (!hasReceivedFirstChunk) {
+              fullText = chunk
+              displayedText = ""
+              hasReceivedFirstChunk = true
+              // Start typing simulation immediately
+              typeNextChar()
+            } else {
+              // Append new chunk and continue typing
+              fullText += chunk
+              // If typing is caught up, continue typing new content
+              if (!typingTimeout && displayedText.length >= fullText.length - chunk.length) {
+                typeNextChar()
+              }
+            }
+          }
+        }
+        
+        // Ensure final text is displayed (wait for typing to catch up)
+        const waitForTyping = () => {
+          if (displayedText.length < fullText.length) {
+            setTimeout(waitForTyping, 50)
+          } else {
+            // Typing complete
+            setMessages((prev) => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage && lastMessage.role === "assistant") {
+                lastMessage.content = fullText
+              }
+              return newMessages
+            })
+          }
+        }
+        waitForTyping()
+        
+        // Ensure we have content (remove "Thinking..." if no chunks received)
+        if (!hasReceivedFirstChunk) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage && lastMessage.role === "assistant") {
+              lastMessage.content = "I'm processing your request..."
+            }
+            return newMessages
+          })
+        }
+      } else {
+        // Handle non-streaming JSON response (fallback or cached)
+        const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+
+        // Update the assistant message with full response
+        let replyText = data.reply || "I apologize, but I couldn't generate a response."
+        
+        // Add database info if available (for visibility)
+        if (data.dataInfo && data.dataInfo.hasData) {
+          replyText += `\n\n_📊 Found ${data.dataInfo.resultCount} result(s) in your database_`
+        } else if (data.dataInfo && !data.dataInfo.hasData && data.dataInfo.sqlQuery !== 'No SQL generated') {
+          replyText += `\n\n_💡 Note: I queried your database but didn't find matching data_`
+        }
+        
+        // Simulate typing for non-streaming responses too
+        setIsLoading(false)
+        let typedText = ""
+        const typeResponse = () => {
+          if (typedText.length < replyText.length) {
+            typedText = replyText.slice(0, typedText.length + 1)
+            setMessages((prev) => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage.role === "assistant") {
+                lastMessage.content = typedText
+              }
+              return newMessages
+            })
+            setTimeout(typeResponse, 20) // Type 20ms per character
+          }
+        }
+        typeResponse()
+        
+        // Log database info to console for debugging
+        if (data.dataInfo) {
+          console.log("Database Query Info:", {
+            sql: data.dataInfo.sqlQuery,
+            resultCount: data.dataInfo.resultCount,
+            hasData: data.dataInfo.hasData,
+            sampleData: data.dataInfo.sampleData,
+          })
+        }
+      }
     } catch (error) {
       console.error("Error sending message:", error)
-      const errorMessage: Message = {
-        role: "assistant",
-        content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      // Update the error message
+      setMessages((prev) => {
+        const newMessages = [...prev]
+        const lastMessage = newMessages[newMessages.length - 1]
+        if (lastMessage.role === "assistant") {
+          lastMessage.content = error instanceof Error 
+            ? `Error: ${error.message}` 
+            : "I apologize, but I'm having trouble processing your request right now. Please try again in a moment."
+        }
+        return newMessages
+      })
     } finally {
       setIsLoading(false)
     }
