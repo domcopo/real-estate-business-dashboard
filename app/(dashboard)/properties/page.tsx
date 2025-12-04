@@ -1,7 +1,5 @@
 "use client"
 
-"use client"
-
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -31,10 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, ArrowUpDown, Edit, Upload, Download, FileText, Star, AlertCircle, Trash2, Check, X } from "lucide-react"
-import { SaveButton } from "@/components/ui/save-button"
 import { Property } from "@/types"
-import { useState, useMemo, useCallback, useRef, useEffect } from "react"
-import { useUser } from "@clerk/nextjs"
+import { useState, useMemo, useCallback, useRef } from "react"
 import Link from "next/link"
 import {
   PropertyField,
@@ -146,78 +142,10 @@ type SortField = "address" | "status" | "currentEstValue" | "purchasePrice" | "m
 type SortDirection = "asc" | "desc"
 
 export default function PropertiesPage() {
-  const { user } = useUser()
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Load properties from database on mount
-  useEffect(() => {
-    async function loadProperties() {
-      if (!user) {
-        setLoading(false)
-        return
-      }
-
-      try {
-        const response = await fetch('/api/properties')
-        if (response.ok) {
-          const data = await response.json()
-          console.log('Loaded properties from database:', data.properties?.length || 0)
-          
-          // Always set properties from database
-          if (data.properties && Array.isArray(data.properties)) {
-            const loadedProperties: Property[] = data.properties.map((p: any) => ({
-              id: p.id, // Use database ID (UUID)
-              address: p.address,
-              type: p.type,
-              status: p.status,
-              mortgageHolder: p.mortgage_holder,
-              totalMortgageAmount: parseFloat(p.total_mortgage_amount) || 0,
-              purchasePrice: parseFloat(p.purchase_price) || 0,
-              currentEstValue: parseFloat(p.current_est_value) || 0,
-              monthlyMortgagePayment: parseFloat(p.monthly_mortgage_payment) || 0,
-              monthlyInsurance: parseFloat(p.monthly_insurance) || 0,
-              monthlyPropertyTax: parseFloat(p.monthly_property_tax) || 0,
-              monthlyOtherCosts: parseFloat(p.monthly_other_costs) || 0,
-              monthlyGrossRent: parseFloat(p.monthly_gross_rent) || 0,
-              ownership: p.ownership,
-              linkedWebsites: p.linked_websites || [],
-              rentRoll: [], // TODO: Load from rent_roll_units table
-              workRequests: [], // TODO: Load from work_requests table
-            }))
-            console.log('Loaded properties from database on mount:', loadedProperties.length)
-            setProperties(loadedProperties)
-          } else {
-            // No properties in database, set empty array
-            console.log('No properties in database, setting empty array')
-            setProperties([])
-          }
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          console.error('Failed to load properties:', errorData)
-          // Don't clear properties on error - might be a temporary issue
-          // Only set empty if we're sure there are no properties
-          if (properties.length === 0) {
-            setProperties([])
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load properties:', error)
-        // Don't clear properties on error - might be a temporary issue
-        // Only set empty if we're sure there are no properties
-        if (properties.length === 0) {
-          setProperties([])
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadProperties()
-  }, [user])
+  const [properties, setProperties] = useState<Property[]>(mockProperties)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [csvData, setCsvData] = useState<string[][]>([])
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -373,28 +301,9 @@ export default function PropertiesPage() {
   }
 
   // Handle delete property
-  const handleDeleteProperty = async (propertyId: string) => {
-    if (!confirm("Are you sure you want to delete this property? This action cannot be undone.")) {
-      return
-    }
-
-    try {
-      // Delete from database first
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        // Remove from local state after successful deletion
-        setProperties(properties.filter((p) => p.id !== propertyId))
-        console.log('Property deleted successfully')
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to delete property')
-      }
-    } catch (error: any) {
-      console.error('Error deleting property:', error)
-      alert(`Failed to delete property: ${error.message || 'Unknown error'}`)
+  const handleDeleteProperty = (propertyId: string) => {
+    if (confirm("Are you sure you want to delete this property? This action cannot be undone.")) {
+      setProperties(properties.filter((p) => p.id !== propertyId))
     }
   }
 
@@ -404,8 +313,6 @@ export default function PropertiesPage() {
     if (field === "monthlyCosts" || field === "monthlyCashflow" || field === "roe") {
       return
     }
-    
-    // Allow editing all other fields including type and mortgageHolder
     
     setEditingCell({ propertyId, field })
     // Use rawValue if provided (for formatted currency/percentage), otherwise use currentValue
@@ -437,7 +344,6 @@ export default function PropertiesPage() {
           [
             "purchasePrice",
             "currentEstValue",
-            "totalMortgageAmount",
             "monthlyMortgagePayment",
             "monthlyInsurance",
             "monthlyPropertyTax",
@@ -478,107 +384,6 @@ export default function PropertiesPage() {
   const handleCellCancel = () => {
     setEditingCell(null)
     setEditValue("")
-  }
-
-  const handleSaveProperties = async () => {
-    try {
-      // Send ALL properties - don't filter them out
-      // The API will validate and handle invalid ones
-      // This prevents accidentally deleting properties that are filtered out
-      console.log('Saving properties:', properties.length, 'total properties in state')
-      
-      // Log any properties that might be missing required fields (for debugging)
-      const invalidProperties = properties.filter((prop: Property) => {
-        return !prop.address || !prop.type || !prop.status
-      })
-      if (invalidProperties.length > 0) {
-        console.warn(`⚠️ ${invalidProperties.length} properties missing required fields and will be skipped:`, invalidProperties.map(p => ({
-          id: p.id,
-          address: p.address || '(empty)',
-          type: p.type || '(empty)',
-          status: p.status || '(empty)'
-        })))
-      }
-      
-      // Log valid properties
-      const validProperties = properties.filter((prop: Property) => {
-        return prop.address && prop.type && prop.status
-      })
-      console.log(`✅ ${validProperties.length} properties have all required fields and will be saved`)
-
-      const response = await fetch('/api/properties', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          properties: properties, // Send all properties, not just "valid" ones
-          workspaceId: null,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log('Properties saved successfully:', data)
-        
-        // Reload properties from database to ensure state is in sync
-        // Add a small delay to ensure database has processed the save
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        try {
-          const reloadResponse = await fetch('/api/properties')
-          if (reloadResponse.ok) {
-            const reloadData = await reloadResponse.json()
-            console.log('Reloaded properties after save:', reloadData.properties?.length || 0)
-            
-            if (reloadData.properties && Array.isArray(reloadData.properties)) {
-              const reloadedProperties: Property[] = reloadData.properties.map((p: any) => ({
-                id: p.id, // Use database ID (UUID)
-                address: p.address,
-                type: p.type,
-                status: p.status,
-                mortgageHolder: p.mortgage_holder,
-                totalMortgageAmount: parseFloat(p.total_mortgage_amount) || 0,
-                purchasePrice: parseFloat(p.purchase_price) || 0,
-                currentEstValue: parseFloat(p.current_est_value) || 0,
-                monthlyMortgagePayment: parseFloat(p.monthly_mortgage_payment) || 0,
-                monthlyInsurance: parseFloat(p.monthly_insurance) || 0,
-                monthlyPropertyTax: parseFloat(p.monthly_property_tax) || 0,
-                monthlyOtherCosts: parseFloat(p.monthly_other_costs) || 0,
-                monthlyGrossRent: parseFloat(p.monthly_gross_rent) || 0,
-                ownership: p.ownership,
-                linkedWebsites: p.linked_websites || [],
-                rentRoll: [],
-                workRequests: [],
-              }))
-              console.log('Setting reloaded properties:', reloadedProperties.length)
-              setProperties(reloadedProperties)
-            } else {
-              // If no properties returned, keep current state (don't clear)
-              console.warn('No properties returned after reload, keeping current state')
-              // Don't setProperties([]) - this would clear everything
-            }
-          } else {
-            const errorData = await reloadResponse.json().catch(() => ({}))
-            console.error('Failed to reload properties after save:', errorData)
-            // Don't clear properties if reload fails - keep current state
-          }
-        } catch (reloadError) {
-          console.error('Failed to reload properties after save:', reloadError)
-          // Don't throw - save was successful, just reload failed
-          // Keep current properties state - don't clear them
-        }
-        
-        return // Success - SaveButton will show success state
-      } else {
-        const errorData = await response.json()
-        console.error('Save failed:', errorData)
-        throw new Error(errorData.details || errorData.error || 'Failed to save properties')
-      }
-    } catch (error: any) {
-      console.error('Error saving properties:', error)
-      throw error // Re-throw so SaveButton can handle it
-    }
   }
 
   // Render editable cell
@@ -698,7 +503,6 @@ export default function PropertiesPage() {
       "Type",
       "Status",
       "Mortgage Holder",
-      "Total Mortgage Amount",
       "Purchase Price",
       "Current Est. Value",
       "Monthly Mortgage Payment",
@@ -713,7 +517,6 @@ export default function PropertiesPage() {
       p.type,
       p.status,
       p.mortgageHolder || "",
-      (p.totalMortgageAmount || 0).toString(),
       p.purchasePrice.toString(),
       p.currentEstValue.toString(),
       p.monthlyMortgagePayment.toString(),
@@ -757,7 +560,6 @@ export default function PropertiesPage() {
       "Type",
       "Status",
       "Mortgage Holder",
-      "Total Mortgage Amount",
       "Purchase Price",
       "Current Est. Value",
       "Monthly Mortgage Payment",
@@ -773,7 +575,6 @@ export default function PropertiesPage() {
         "House",
         "rented",
         "Sample Bank",
-        "400000",
         "500000",
         "550000",
         "2500",
@@ -1035,7 +836,6 @@ export default function PropertiesPage() {
     { value: "type", label: "Type" },
     { value: "status", label: "Status" },
     { value: "mortgageHolder", label: "Mortgage Holder" },
-    { value: "totalMortgageAmount", label: "Total Mortgage Amount" },
     { value: "purchasePrice", label: "Purchase Price" },
     { value: "currentEstValue", label: "Current Est. Value" },
     { value: "monthlyMortgagePayment", label: "Monthly Mortgage Payment" },
@@ -1045,30 +845,18 @@ export default function PropertiesPage() {
     { value: "monthlyGrossRent", label: "Monthly Gross Rent" },
   ]
 
-  if (loading) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8 flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <div className="text-muted-foreground">Loading properties...</div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="p-8 space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight">
             Property Management
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <p className="text-muted-foreground">
             Portfolio overview and financial tracking
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <SaveButton onSave={handleSaveProperties} />
+        <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
             Import
@@ -1090,28 +878,7 @@ export default function PropertiesPage() {
             <FileText className="mr-2 h-4 w-4" />
             Export JSON
           </Button>
-        <Button
-          onClick={() => {
-            // Add a new property with default values (all required fields filled)
-            const newProperty: Property = {
-              id: `temp-${Date.now()}`, // Temporary ID until saved
-              address: 'New Property', // Default address so it can be saved
-              type: 'residential', // Default type so it can be saved
-              status: 'vacant', // Valid status
-              totalMortgageAmount: 0,
-              purchasePrice: 0,
-              currentEstValue: 0,
-              monthlyMortgagePayment: 0,
-              monthlyInsurance: 0,
-              monthlyPropertyTax: 0,
-              monthlyOtherCosts: 0,
-              monthlyGrossRent: 0,
-              rentRoll: [],
-              workRequests: [],
-            }
-            setProperties([...properties, newProperty])
-          }}
-        >
+        <Button>
           <Plus className="mr-2 h-4 w-4" />
           Add Property
         </Button>
@@ -1119,14 +886,14 @@ export default function PropertiesPage() {
       </div>
 
       {/* Status Filter */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-        <span className="text-sm text-muted-foreground whitespace-nowrap">Filter by status:</span>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Filter by status:</span>
         <select
           id="statusFilter"
           name="statusFilter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border rounded-md text-sm w-full sm:w-auto min-h-[44px]"
+          className="px-3 py-1 border rounded-md text-sm"
         >
           <option value="all">All</option>
           <option value="rented">Rented</option>
@@ -1137,8 +904,8 @@ export default function PropertiesPage() {
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-x-auto">
-        <Table className="min-w-[800px]">
+      <div className="border rounded-lg">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead
@@ -1159,8 +926,6 @@ export default function PropertiesPage() {
                   <ArrowUpDown className="h-4 w-4" />
                 </div>
               </TableHead>
-              <TableHead>Mortgage Holder</TableHead>
-              <TableHead className="text-right">Total Mortgage</TableHead>
               <TableHead>Partners</TableHead>
               <TableHead
                 className="cursor-pointer hover:bg-muted/50 text-right"
@@ -1261,24 +1026,6 @@ export default function PropertiesPage() {
                       >
                         {property.status.replace("_", " ")}
                       </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {renderEditableCell(
-                      property.id,
-                      "mortgageHolder",
-                      property.mortgageHolder || "",
-                      property.mortgageHolder || "",
-                      true
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {renderEditableCell(
-                      property.id,
-                      "totalMortgageAmount",
-                      formatCurrency(property.totalMortgageAmount || 0),
-                      property.totalMortgageAmount || 0,
-                      true
                     )}
                   </TableCell>
                   <TableCell>
@@ -1410,7 +1157,7 @@ export default function PropertiesPage() {
           </TableBody>
           <TableFooter>
             <TableRow className="font-bold bg-muted/50">
-              <TableCell colSpan={5}>Portfolio Totals</TableCell>
+              <TableCell colSpan={3}>Portfolio Totals</TableCell>
               <TableCell className="text-right">
                 {portfolioTotals.totalProperties} Properties
               </TableCell>
