@@ -240,7 +240,59 @@ Return the SQL query in this JSON format:
       queryResults = []
     }
 
-    // Step 3: Build page context information
+    // Step 3: Automatically query relevant data based on page context (even if not explicitly asked)
+    let autoQueryResults: any[] = []
+    let autoQuerySQL: string = ''
+    
+    if (pageContext) {
+      try {
+        // Generate automatic context queries based on page
+        let autoQueryPrompt = `Generate a SQL query to get the most relevant data for a user on the "${pageContext}" page. 
+        
+Database Schema:
+${dbSchema}
+
+User ID: ${user.id}
+
+Generate a query that would give useful context about what's on this page. For example:
+- If page is "properties": Get all properties with key metrics (address, status, cash flow, ROE)
+- If page is "dashboard": Get portfolio summary (total properties, total cash flow, top performers)
+- If page is "agency": Get all clients with their metrics
+- If page is "business": Get campaigns data
+
+Return ONLY the SQL query in JSON format:
+{
+  "sql_query": "SELECT ... FROM ... WHERE user_id = '${user.id}' ..."
+}`
+
+        const autoQueryResponse = await model.generateContent(autoQueryPrompt)
+        const autoQueryText = autoQueryResponse.response.text()
+        
+        // Parse SQL from response
+        try {
+          const jsonMatch = autoQueryText.match(/\{[\s\S]*"sql_query"[\s\S]*\}/)
+          const jsonStr = jsonMatch ? jsonMatch[0] : autoQueryText
+          const parsed = JSON.parse(jsonStr)
+          autoQuerySQL = parsed.sql_query || parsed.sql || autoQueryText.trim()
+        } catch {
+          autoQuerySQL = autoQueryText.replace(/```sql\n?/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        }
+
+        // Execute automatic query
+        if (autoQuerySQL && !autoQuerySQL.toLowerCase().includes('insert') && !autoQuerySQL.toLowerCase().includes('update') && !autoQuerySQL.toLowerCase().includes('delete')) {
+          try {
+            autoQueryResults = await runSupabaseQuery(autoQuerySQL)
+            console.log(`Auto-query returned ${autoQueryResults.length} rows for page context: ${pageContext}`)
+          } catch (err) {
+            console.warn("Auto-query failed:", err)
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to generate auto-query:", err)
+      }
+    }
+
+    // Step 4: Build page context information
     let pageContextInfo = ""
     if (pageContext) {
       pageContextInfo = `\n**Current Page Context:** The user is on the "${pageContext}" page.`
@@ -273,24 +325,33 @@ Return the SQL query in this JSON format:
       pageContextInfo += `\n\n**Page-Specific Data Available:**\n${JSON.stringify(pageData, null, 2)}\n\nUse this data to provide context-aware insights. Reference specific numbers, properties, campaigns, or metrics visible on the page.`
     }
 
-    // Step 4: Analyze results and generate insights
-    const hasData = queryResults.length > 0
+    // Add auto-query results
+    if (autoQueryResults.length > 0) {
+      pageContextInfo += `\n\n**Automatic Context Data (from database):**\n${JSON.stringify(autoQueryResults, null, 2)}\n\nThis data is automatically available from their database. USE IT in your response - reference specific numbers, properties, or metrics.`
+    }
+
+    // Step 5: Combine query results with auto-query results
+    const allQueryResults = queryResults.length > 0 ? queryResults : autoQueryResults
+    const allSQLQueries = [sqlQuery, autoQuerySQL].filter(Boolean).join('; ')
+
+    // Step 6: Analyze results and generate insights
+    const hasData = allQueryResults.length > 0
     const dataSummary = hasData 
-      ? `Here's the data I found from the database:
+      ? `Here's the data from the database:
 
-${JSON.stringify(queryResults, null, 2)}
+${JSON.stringify(allQueryResults, null, 2)}
 
-**SQL Query Used:** ${sqlQuery}
+**SQL Query Used:** ${allSQLQueries || 'Auto-query based on page context'}
 
 **Database Schema Context:**
 ${dbSchema}
 
-**IMPORTANT:** Reference the actual data numbers in your response. For example, if the query returned 5 properties, say "You have 5 properties". If it shows specific amounts, mention them. Use property addresses, exact dollar amounts, percentages, and specific metrics.`
-      : `I couldn't find specific data in the database for this question. 
+**CRITICAL:** You MUST reference the actual data numbers in your response. Use specific property addresses, exact dollar amounts, percentages, and metrics from the data above. Be BRIEF - 1-3 sentences max unless they ask for details.`
+      : `No specific data found in the database for this question. 
 
-**SQL Query Attempted:** ${sqlQuery || 'No SQL query was generated'}
+**SQL Query Attempted:** ${allSQLQueries || 'No SQL query was generated'}
 
-**Note:** I can still provide real estate coaching advice based on the page context and general principles, but I don't have access to your specific database data for this question.`
+**Note:** Provide brief real estate coaching advice based on page context and general principles. Keep it SHORT - 1-2 sentences.`
 
     const analysisPrompt = `${AI_COACH_SYSTEM_PROMPT}
 
@@ -300,17 +361,19 @@ ${pageContextInfo}
 ${dataSummary}
 
 **Your Response Guidelines:**
-- Use the page context to tailor your response - if they're on the Properties page, focus on property analysis
+- **BE BRIEF**: 1-3 sentences MAXIMUM unless they explicitly ask for details, analysis, or "tell me more"
+- Use the page context automatically - reference what's on their screen
 - Reference specific numbers from the database OR page data (e.g., "You have 5 properties", "Your campaign ROAS is 3.2x", "Property at 123 Main St has 18% ROE")
 - Be energetic and motivational but data-driven
-- Provide actionable insights, not just observations
-- Ask ONE follow-up question to move the conversation forward
-- Length: 3-6 sentences for quick answers, 2-3 paragraphs for analysis
-- If analyzing properties: calculate ROE, cash-on-cash return, and cash flow
-- If analyzing campaigns: focus on ROAS, conversion rates, and optimization opportunities
-- Always connect insights to their goals and next steps
+- Provide ONE actionable insight, not multiple
+- Optional: Ask ONE quick follow-up question
+- If analyzing properties: mention ROE, cash flow, or key metric briefly
+- If analyzing campaigns: mention ROAS or key metric briefly
+- Always use their actual data - don't speak in generalities
 
-**Remember:** You're ELO AI - Elite Real Estate Intelligence. Lead with data, inspire with vision, execute with strategy!`
+**CRITICAL:** Default to SHORT responses. Only expand if they explicitly ask for more detail, analysis, or explanation.
+
+**Remember:** You're ELO AI - Elite Real Estate Intelligence. Brief, data-driven, actionable!`
 
     // Generate final response (streaming or regular)
     if (useStreaming) {

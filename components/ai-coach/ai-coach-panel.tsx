@@ -4,13 +4,65 @@ import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, Loader2 } from "lucide-react"
+import { Send, Loader2, Mic, MicOff } from "lucide-react"
 import { BusinessContext } from "@/lib/ai-coach/context-builder"
 import { MarkdownRenderer } from "./markdown-renderer"
+
+// TypeScript types for Web Speech API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+  resultIndex: number
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+  message: string
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  item(index: number): SpeechRecognitionResult
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+  isFinal: boolean
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
 
 interface Message {
   role: "user" | "assistant"
   content: string
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: {
+      new (): SpeechRecognition
+    }
+    webkitSpeechRecognition: {
+      new (): SpeechRecognition
+    }
+  }
 }
 
 interface AiCoachPanelProps {
@@ -44,6 +96,8 @@ export function AiCoachPanel({
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -329,10 +383,25 @@ export function AiCoachPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask me anything about your business..."
-            disabled={isLoading}
+            disabled={isLoading || isListening}
             className="flex-1"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+          {recognition && (
+            <Button
+              type="button"
+              variant={isListening ? "destructive" : "outline"}
+              onClick={isListening ? stopListening : startListening}
+              disabled={isLoading}
+              title={isListening ? "Stop recording" : "Start voice input"}
+            >
+              {isListening ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          <Button type="submit" disabled={isLoading || !input.trim() || isListening}>
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -340,6 +409,12 @@ export function AiCoachPanel({
             )}
           </Button>
         </div>
+        {isListening && (
+          <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+            <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
+            Listening...
+          </div>
+        )}
       </form>
     </div>
   )
