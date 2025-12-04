@@ -117,3 +117,5 @@ If you're still having issues:
 - [ ] You've redeployed after adding variables
 - [ ] You've checked the Vercel function logs for actual errors
 
+
+

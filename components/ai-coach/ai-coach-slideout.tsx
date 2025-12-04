@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import type React from "react"
 import { Button } from "@/components/ui/button"
-import { Sparkles, X } from "lucide-react"
+import { Sparkles, X, Brain } from "lucide-react"
 import { AiCoachPanel } from "./ai-coach-panel"
 import { BusinessContext } from "@/lib/ai-coach/context-builder"
 import { cn } from "@/lib/utils"
@@ -13,21 +14,40 @@ interface AiCoachSlideoutProps {
     label: string
     message: string
   }>
+  onClose?: () => void
+  isOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  title?: string
+  icon?: React.ComponentType<{ className?: string }>
 }
 
-export function AiCoachSlideout({ context, quickActions }: AiCoachSlideoutProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function AiCoachSlideout({ context, quickActions, onClose, isOpen: externalIsOpen, onOpenChange, title = "AI Coach", icon: Icon = Sparkles }: AiCoachSlideoutProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen
+  
+  const handleOpenChange = (open: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(open)
+    } else {
+      setInternalIsOpen(open)
+    }
+    if (!open && onClose) {
+      onClose()
+    }
+  }
 
   return (
     <>
-      {/* Floating Button */}
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 h-14 w-14 rounded-full shadow-lg z-40"
-        size="lg"
-      >
-        <Sparkles className="h-5 w-5" />
-      </Button>
+      {/* Floating Button - only show if not externally controlled */}
+      {externalIsOpen === undefined && (
+        <Button
+          onClick={() => handleOpenChange(true)}
+          className="fixed bottom-24 right-6 h-14 w-14 rounded-full shadow-lg z-40"
+          size="lg"
+        >
+          <Sparkles className="h-5 w-5" />
+        </Button>
+      )}
 
       {/* Slide-out Panel */}
       <div
@@ -40,13 +60,13 @@ export function AiCoachSlideout({ context, quickActions }: AiCoachSlideoutProps)
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              <h2 className="text-lg font-semibold">AI Coach</h2>
+              <Icon className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">{title}</h2>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -63,7 +83,7 @@ export function AiCoachSlideout({ context, quickActions }: AiCoachSlideoutProps)
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setIsOpen(false)}
+          onClick={() => handleOpenChange(false)}
         />
       )}
     </>

@@ -79,6 +79,7 @@ CREATE TABLE properties (
   monthly_gross_rent DECIMAL(10, 2) NOT NULL DEFAULT 0,
   ownership TEXT CHECK (ownership IN ('100% ownership', '50% partner', '25% partner', '75% partner', '33% partner', '67% partner')),
   linked_websites TEXT[],
+  custom_fields JSONB,
   created_at TIMESTAMP,
   updated_at TIMESTAMP
 );
@@ -158,11 +159,8 @@ CREATE TABLE ghl_weekly_metrics (
 -- Use user_id to filter queries for the current user
 -- Timestamps are stored as TIMESTAMP type
 -- Arrays are stored as PostgreSQL array types (TEXT[], UUID[])
--- JSONB is used for flexible JSON data (tech_stack in websites)
+-- JSONB is used for flexible JSON data (tech_stack in websites, custom_fields in properties)
 `
 
   return schema.trim()
 }
-
-
-

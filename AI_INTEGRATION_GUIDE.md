@@ -295,3 +295,5 @@ if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
 
 **The AI isn't "trained" by you** - it's a pre-trained model you're prompting. That's the right approach for most use cases!
 
+
+

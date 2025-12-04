@@ -158,6 +158,17 @@ export async function POST(request: NextRequest) {
         linked_websites: Array.isArray(prop.linkedWebsites) && prop.linkedWebsites.length > 0 ? prop.linkedWebsites : null,
       }
       
+      // Extract custom fields (fields starting with custom_)
+      const customFieldsData: Record<string, any> = {}
+      Object.keys(prop).forEach(key => {
+        if (key.startsWith('custom_')) {
+          customFieldsData[key] = prop[key]
+        }
+      })
+      if (Object.keys(customFieldsData).length > 0) {
+        propertyToInsert.custom_fields = customFieldsData
+      }
+      
       // Preserve ID if it exists and is a valid UUID (from database)
       // This allows upsert to update existing properties
       // Don't include ID if it's not a UUID (e.g., temporary IDs like "1", "2", etc.)

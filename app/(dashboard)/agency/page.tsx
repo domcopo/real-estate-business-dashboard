@@ -2,12 +2,13 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Users, Building2, Link as LinkIcon } from "lucide-react"
+import { Plus, Users, Building2, Link as LinkIcon, Globe, Grid3x3, Rocket, CreditCard, ArrowRight } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { AiCoachSlideout } from "@/components/ai-coach/ai-coach-slideout"
 import { buildAgencyContext } from "@/lib/ai-coach/context-builder"
 import { GoHighLevelClient, ClientMetrics } from "@/types/gohighlevel"
 import { useEffect, useState } from "react"
+import Link from "next/link"
 
 // Mock data - replace with real API calls
 const mockAgencyClients: GoHighLevelClient[] = [
@@ -142,7 +143,7 @@ export default function AgencyPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Agency Management</h1>
           <p className="text-muted-foreground">
-            Manage clients, contacts, and projects
+            Manage your agency tools and resources
           </p>
         </div>
         <Button>
@@ -151,46 +152,133 @@ export default function AgencyPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {clients.map((client) => (
-          <Card key={client.id}>
+      {/* Agency Tools Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+        <Link href="/websites">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
             <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    {client.name}
-                  </CardTitle>
-                  <CardDescription className="mt-2">
-                    {client.status}
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className="flex items-center gap-3">
+                <Globe className="h-6 w-6 text-primary" />
+                Websites & Tech Stack
+              </CardTitle>
+              <CardDescription>
+                Manage your websites and technology stack
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    Contacts
-                  </span>
-                  <span className="text-sm font-semibold">{client.contacts}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <LinkIcon className="h-4 w-4" />
-                    Websites
-                  </span>
-                  <span className="text-sm font-semibold">{client.websites}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Tasks</span>
-                  <span className="text-sm font-semibold">{client.tasks}</span>
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">View websites</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
-        ))}
+        </Link>
+
+        <Link href="/board">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <Grid3x3 className="h-6 w-6 text-primary" />
+                Flexboard
+              </CardTitle>
+              <CardDescription>
+                Your visual workspace board
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Open flexboard</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/ghl-clients">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <Rocket className="h-6 w-6 text-primary" />
+                GoHighLevel Clients
+              </CardTitle>
+              <CardDescription>
+                Manage your GoHighLevel client accounts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">View clients</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/subscriptions">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <CreditCard className="h-6 w-6 text-primary" />
+                Subscriptions
+              </CardTitle>
+              <CardDescription>
+                Track and manage your subscriptions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">View subscriptions</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Agency Clients Section */}
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight mb-4">Agency Clients</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {clients.map((client) => (
+            <Card key={client.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="h-5 w-5" />
+                      {client.name}
+                    </CardTitle>
+                    <CardDescription className="mt-2">
+                      {client.status}
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      Contacts
+                    </span>
+                    <span className="text-sm font-semibold">{client.contacts}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <LinkIcon className="h-4 w-4" />
+                      Websites
+                    </span>
+                    <span className="text-sm font-semibold">{client.websites}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Tasks</span>
+                    <span className="text-sm font-semibold">{client.tasks}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* AI Coach Slideout */}

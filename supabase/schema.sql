@@ -79,6 +79,7 @@ CREATE TABLE properties (
   -- Ownership
   ownership TEXT CHECK (ownership IN ('100% ownership', '50% partner', '25% partner', '75% partner', '33% partner', '67% partner')),
   linked_websites TEXT[], -- Array of website IDs
+  custom_fields JSONB, -- Custom field values stored as JSON
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

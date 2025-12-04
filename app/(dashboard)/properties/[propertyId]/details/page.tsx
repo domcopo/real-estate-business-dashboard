@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, use } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/select"
 import { Property, RentRollUnit, WorkRequest } from "@/types"
 import { ArrowLeft, Plus, Trash2, Save, Upload, FileText, Star, AlertCircle } from "lucide-react"
-import { SaveButton } from "@/components/ui/save-button"
 
 // Mock data - in production, this would come from an API
 const mockProperties: Property[] = [
@@ -126,10 +125,12 @@ const mockProperties: Property[] = [
   },
 ]
 
-export default function PropertyDetailsPage({ params }: { params: Promise<{ propertyId: string }> }) {
-  const resolvedParams = use(params)
-  const propertyId = resolvedParams.propertyId
+export default function PropertyDetailsPage() {
+  const params = useParams()
   const router = useRouter()
+  const propertyId = params?.propertyId 
+    ? (Array.isArray(params.propertyId) ? params.propertyId[0] : params.propertyId)
+    : undefined
 
   // Find the property
   const property = propertyId ? mockProperties.find((p) => p.id === propertyId) : undefined
@@ -145,9 +146,24 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   const [newUnit, setNewUnit] = useState<Partial<RentRollUnit>>({})
   const [newWorkRequest, setNewWorkRequest] = useState<Partial<WorkRequest>>({})
 
-  // Helper functions - must be defined before early return
+  // Early return after all hooks
+  if (!property || !propertyData) {
+    return (
+      <div className="p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Property Not Found</h1>
+          <Button onClick={() => router.push("/properties")}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Properties
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // After the early return, propertyData is guaranteed to be non-null
+  // Calculate metrics
   const calculateMonthlyCosts = (): number => {
-    if (!propertyData) return 0
     return (
       propertyData.monthlyMortgagePayment +
       propertyData.monthlyInsurance +
@@ -157,7 +173,6 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   }
 
   const calculateMonthlyCashflow = (): number => {
-    if (!propertyData) return 0
     return propertyData.monthlyGrossRent - calculateMonthlyCosts()
   }
 
@@ -166,13 +181,12 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   }
 
   const calculateCapRate = (): number => {
-    if (!propertyData || propertyData.currentEstValue === 0) return 0
+    if (propertyData.currentEstValue === 0) return 0
     const netOperatingIncome = calculateAnnualCashflow()
     return (netOperatingIncome / propertyData.currentEstValue) * 100
   }
 
   const calculateCashOnCashReturn = (): number => {
-    if (!propertyData) return 0
     const downPayment = propertyData.purchasePrice * 0.2 // Assuming 20% down
     if (downPayment === 0) return 0
     const annualCashflow = calculateAnnualCashflow()
@@ -199,48 +213,10 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
     })
   }
 
-  const handleSaveProperty = async () => {
-    if (!propertyData || !propertyId) {
-      throw new Error('Property data or ID missing')
-    }
-
-    try {
-      // Save main property data
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          address: propertyData.address,
-          type: propertyData.type,
-          status: propertyData.status,
-          mortgageHolder: propertyData.mortgageHolder,
-          totalMortgageAmount: propertyData.totalMortgageAmount || 0,
-          purchasePrice: propertyData.purchasePrice,
-          currentEstValue: propertyData.currentEstValue,
-          monthlyMortgagePayment: propertyData.monthlyMortgagePayment,
-          monthlyInsurance: propertyData.monthlyInsurance,
-          monthlyPropertyTax: propertyData.monthlyPropertyTax,
-          monthlyOtherCosts: propertyData.monthlyOtherCosts,
-          monthlyGrossRent: propertyData.monthlyGrossRent,
-          ownership: propertyData.ownership,
-          linkedWebsites: propertyData.linkedWebsites,
-        }),
-      })
-
-      if (response.ok) {
-        // TODO: Save rent roll units and work requests separately
-        // For now, just save the main property
-        return // Success - SaveButton will show success state
-      } else {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to save property')
-      }
-    } catch (error: any) {
-      console.error('Error saving property:', error)
-      throw error // Re-throw so SaveButton can handle it
-    }
+  const handleSaveProperty = () => {
+    // In production, this would save to an API
+    console.log("Saving property:", propertyData)
+    alert("Property saved! (In production, this would save to your database)")
   }
 
   const handleAddUnit = () => {
@@ -344,12 +320,8 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
   // Get work request count for badge
   const workRequestCount = workRequests.length
 
-  // After early return, propertyData is guaranteed to be non-null
-  // Use non-null assertion for TypeScript
-  const safePropertyData = propertyData!
-
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
+    <div className="p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -363,7 +335,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                {safePropertyData.address}
+                {propertyData.address}
                 {needsAttention && (
                   <Star className="h-6 w-6 text-red-500 fill-red-500" />
                 )}
@@ -372,9 +344,9 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                 )}
               </h1>
               <p className="text-muted-foreground">
-                {safePropertyData.type} •{" "}
-                <Badge variant={getStatusBadgeVariant(safePropertyData.status)}>
-                  {safePropertyData.status.replace("_", " ")}
+                {propertyData.type} •{" "}
+                <Badge variant={getStatusBadgeVariant(propertyData.status)}>
+                  {propertyData.status.replace("_", " ")}
                 </Badge>
                 {needsAttention && (
                   <span className="ml-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
@@ -391,7 +363,10 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
             </div>
           </div>
         </div>
-        <SaveButton onSave={handleSaveProperty} />
+        <Button onClick={handleSaveProperty}>
+          <Save className="mr-2 h-4 w-4" />
+          Save Changes
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -427,28 +402,11 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                   <Input
                     id="mortgageHolder"
                     name="mortgageHolder"
-                    value={safePropertyData.mortgageHolder || ""}
+                    value={propertyData.mortgageHolder || ""}
                     onChange={(e) =>
                       handlePropertyFieldChange("mortgageHolder", e.target.value)
                     }
                     placeholder="Bank name"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="totalMortgageAmount">Total Mortgage Amount</Label>
-                  <Input
-                    id="totalMortgageAmount"
-                    name="totalMortgageAmount"
-                    type="number"
-                    value={safePropertyData.totalMortgageAmount || 0}
-                    onChange={(e) =>
-                      handlePropertyFieldChange(
-                        "totalMortgageAmount",
-                        parseFloat(e.target.value) || 0
-                      )
-                    }
-                    placeholder="0"
                   />
                 </div>
 
@@ -458,7 +416,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="purchasePrice"
                     name="purchasePrice"
                     type="number"
-                    value={safePropertyData.purchasePrice}
+                    value={propertyData.purchasePrice}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "purchasePrice",
@@ -474,7 +432,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="currentEstValue"
                     name="currentEstValue"
                     type="number"
-                    value={safePropertyData.currentEstValue}
+                    value={propertyData.currentEstValue}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "currentEstValue",
@@ -492,7 +450,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="monthlyMortgagePayment"
                     name="monthlyMortgagePayment"
                     type="number"
-                    value={safePropertyData.monthlyMortgagePayment}
+                    value={propertyData.monthlyMortgagePayment}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyMortgagePayment",
@@ -508,7 +466,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="monthlyInsurance"
                     name="monthlyInsurance"
                     type="number"
-                    value={safePropertyData.monthlyInsurance}
+                    value={propertyData.monthlyInsurance}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyInsurance",
@@ -526,7 +484,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="monthlyPropertyTax"
                     name="monthlyPropertyTax"
                     type="number"
-                    value={safePropertyData.monthlyPropertyTax}
+                    value={propertyData.monthlyPropertyTax}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyPropertyTax",
@@ -542,7 +500,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="monthlyOtherCosts"
                     name="monthlyOtherCosts"
                     type="number"
-                    value={safePropertyData.monthlyOtherCosts}
+                    value={propertyData.monthlyOtherCosts}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyOtherCosts",
@@ -558,7 +516,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                     id="monthlyGrossRent"
                     name="monthlyGrossRent"
                     type="number"
-                    value={safePropertyData.monthlyGrossRent}
+                    value={propertyData.monthlyGrossRent}
                     onChange={(e) =>
                       handlePropertyFieldChange(
                         "monthlyGrossRent",
@@ -571,7 +529,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
-                    value={safePropertyData.status}
+                    value={propertyData.status}
                     onValueChange={(value) =>
                       handlePropertyFieldChange(
                         "status",
@@ -591,7 +549,7 @@ export default function PropertyDetailsPage({ params }: { params: Promise<{ prop
                       <SelectItem value="sold">Sold</SelectItem>
                     </SelectContent>
                   </Select>
-                  <input type="hidden" name="status" value={safePropertyData.status} />
+                  <input type="hidden" name="status" value={propertyData.status} />
                 </div>
               </CardContent>
             </Card>

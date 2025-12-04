@@ -1,8 +1,8 @@
 "use client"
 
 import { Sidebar } from "@/components/layout/sidebar"
-import { GoHighLevelButton } from "@/components/layout/gohighlevel-button"
 import { InvitationPrompt } from "@/components/team/invitation-prompt"
+import { EloAiButton } from "@/components/layout/elo-ai-button"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -91,7 +91,8 @@ export default function DashboardLayout({
         {children}
       </main>
       
-      <GoHighLevelButton />
+      {/* ELO AI Button - appears on every page */}
+      <EloAiButton />
       
       {/* Invitation Prompt - shows when user has pending invitations */}
       <InvitationPrompt />

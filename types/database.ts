@@ -171,6 +171,7 @@ export interface Database {
           monthly_gross_rent: number
           ownership: '100% ownership' | '50% partner' | '25% partner' | '75% partner' | '33% partner' | '67% partner' | null
           linked_websites: string[] | null
+          custom_fields: Record<string, any> | null
           created_at: string
           updated_at: string
         }
@@ -192,6 +193,7 @@ export interface Database {
           monthly_gross_rent?: number
           ownership?: '100% ownership' | '50% partner' | '25% partner' | '75% partner' | '33% partner' | '67% partner' | null
           linked_websites?: string[] | null
+          custom_fields?: Record<string, any> | null
           created_at?: string
           updated_at?: string
         }
@@ -203,6 +205,7 @@ export interface Database {
           type?: string
           status?: 'rented' | 'vacant' | 'under_maintenance' | 'sold'
           mortgage_holder?: string | null
+          total_mortgage_amount?: number
           purchase_price?: number
           current_est_value?: number
           monthly_mortgage_payment?: number
@@ -212,6 +215,7 @@ export interface Database {
           monthly_gross_rent?: number
           ownership?: '100% ownership' | '50% partner' | '25% partner' | '75% partner' | '33% partner' | '67% partner' | null
           linked_websites?: string[] | null
+          custom_fields?: Record<string, any> | null
           created_at?: string
           updated_at?: string
         }

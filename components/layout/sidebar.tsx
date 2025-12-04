@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { GoHighLevelButtonSidebar } from "./gohighlevel-button-sidebar"
 
 interface NavItem {
   title: string
@@ -39,13 +40,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "AI Coach", href: "/ai-coach", icon: Sparkles },
-  { title: "GoHighLevel Clients", href: "/ghl-clients", icon: Rocket },
-  { title: "Flexboard", href: "/board", icon: Grid3x3 },
   { title: "Property Management", href: "/properties", icon: Home },
   { title: "Agency Management", href: "/agency", icon: Building2 },
   { title: "Business Hub", href: "/business", icon: Briefcase },
-  { title: "Websites & Tech Stack", href: "/websites", icon: Globe },
-  { title: "Subscriptions", href: "/subscriptions", icon: CreditCard },
   { title: "Health & Productivity", href: "/health", icon: Heart },
   { title: "Settings", href: "/settings", icon: Settings },
 ]
@@ -188,6 +185,11 @@ export function Sidebar({ isOpen = false, onClose, onOpen }: SidebarProps) {
           </div>
         </div>
       )}
+
+      {/* GoHighLevel Button */}
+      <div className="border-t p-4">
+        <GoHighLevelButtonSidebar collapsed={collapsed} />
+      </div>
       </div>
     </>
   )
