@@ -108,6 +108,50 @@ export function AiCoachPanel({
     scrollToBottom()
   }, [messages])
 
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (SpeechRecognition) {
+        const recognitionInstance = new SpeechRecognition()
+        recognitionInstance.continuous = false
+        recognitionInstance.interimResults = false
+        recognitionInstance.lang = 'en-US'
+
+        recognitionInstance.onresult = (event: SpeechRecognitionEvent) => {
+          const transcript = event.results[0][0].transcript
+          setInput(transcript)
+          setIsListening(false)
+        }
+
+        recognitionInstance.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error)
+          setIsListening(false)
+        }
+
+        recognitionInstance.onend = () => {
+          setIsListening(false)
+        }
+
+        setRecognition(recognitionInstance)
+      }
+    }
+  }, [])
+
+  const startListening = () => {
+    if (recognition && !isListening) {
+      setIsListening(true)
+      recognition.start()
+    }
+  }
+
+  const stopListening = () => {
+    if (recognition && isListening) {
+      recognition.stop()
+      setIsListening(false)
+    }
+  }
+
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return
 
