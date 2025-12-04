@@ -240,46 +240,69 @@ Return the SQL query in this JSON format:
       queryResults = []
     }
 
-    // Step 3: Automatically query relevant data based on page context (even if not explicitly asked)
+    // Step 3: Automatically query relevant data based on page context (FAST - direct SQL, no AI call)
     let autoQueryResults: any[] = []
     let autoQuerySQL: string = ''
     
-    if (pageContext) {
+    if (pageContext && databaseUrl) {
       try {
-        // Generate automatic context queries based on page
-        let autoQueryPrompt = `Generate a SQL query to get the most relevant data for a user on the "${pageContext}" page. 
+        // Use direct SQL queries for common page contexts (much faster than AI-generated)
+        const pageContextLower = pageContext.toLowerCase()
         
-Database Schema:
-${dbSchema}
-
-User ID: ${user.id}
-
-Generate a query that would give useful context about what's on this page. For example:
-- If page is "properties": Get all properties with key metrics (address, status, cash flow, ROE)
-- If page is "dashboard": Get portfolio summary (total properties, total cash flow, top performers)
-- If page is "agency": Get all clients with their metrics
-- If page is "business": Get campaigns data
-
-Return ONLY the SQL query in JSON format:
-{
-  "sql_query": "SELECT ... FROM ... WHERE user_id = '${user.id}' ..."
-}`
-
-        const autoQueryResponse = await model.generateContent(autoQueryPrompt)
-        const autoQueryText = autoQueryResponse.response.text()
-        
-        // Parse SQL from response
-        try {
-          const jsonMatch = autoQueryText.match(/\{[\s\S]*"sql_query"[\s\S]*\}/)
-          const jsonStr = jsonMatch ? jsonMatch[0] : autoQueryText
-          const parsed = JSON.parse(jsonStr)
-          autoQuerySQL = parsed.sql_query || parsed.sql || autoQueryText.trim()
-        } catch {
-          autoQuerySQL = autoQueryText.replace(/```sql\n?/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        if (pageContextLower === "properties" || pageContextLower === "property") {
+          // Get all properties with key financial metrics
+          autoQuerySQL = `SELECT 
+            id,
+            address,
+            type,
+            status,
+            purchase_price,
+            current_est_value,
+            monthly_mortgage_payment,
+            monthly_insurance,
+            monthly_property_tax,
+            monthly_other_costs,
+            monthly_gross_rent,
+            total_mortgage_amount,
+            mortgage_holder,
+            (monthly_gross_rent - monthly_mortgage_payment - monthly_insurance - monthly_property_tax - monthly_other_costs) as monthly_cash_flow
+          FROM properties 
+          WHERE user_id = '${user.id}'
+          ORDER BY address`
+        } else if (pageContextLower === "dashboard") {
+          // Get portfolio summary
+          autoQuerySQL = `SELECT 
+            COUNT(*) as total_properties,
+            COUNT(CASE WHEN status = 'rented' THEN 1 END) as rented_count,
+            COUNT(CASE WHEN status = 'vacant' THEN 1 END) as vacant_count,
+            SUM(monthly_gross_rent - monthly_mortgage_payment - monthly_insurance - monthly_property_tax - monthly_other_costs) as total_monthly_cash_flow,
+            SUM(purchase_price) as total_portfolio_value
+          FROM properties 
+          WHERE user_id = '${user.id}'`
+        } else if (pageContextLower === "agency" || pageContextLower === "agency management") {
+          // Get agency clients
+          autoQuerySQL = `SELECT 
+            id,
+            name,
+            email,
+            phone,
+            company,
+            subscription_plan,
+            status
+          FROM ghl_clients 
+          WHERE user_id = '${user.id}'
+          ORDER BY name`
+        } else if (pageContextLower === "business" || pageContextLower === "business hub") {
+          // Get subscriptions summary
+          autoQuerySQL = `SELECT 
+            COUNT(*) as total_subscriptions,
+            SUM(cost) as total_monthly_cost
+          FROM subscriptions 
+          WHERE user_id = '${user.id}'`
         }
 
-        // Execute automatic query
-        if (autoQuerySQL && !autoQuerySQL.toLowerCase().includes('insert') && !autoQuerySQL.toLowerCase().includes('update') && !autoQuerySQL.toLowerCase().includes('delete')) {
+        // Execute automatic query if we have one
+        if (autoQuerySQL) {
           try {
             autoQueryResults = await runSupabaseQuery(autoQuerySQL)
             console.log(`Auto-query returned ${autoQueryResults.length} rows for page context: ${pageContext}`)
@@ -288,7 +311,7 @@ Return ONLY the SQL query in JSON format:
           }
         }
       } catch (err) {
-        console.warn("Failed to generate auto-query:", err)
+        console.warn("Failed to execute auto-query:", err)
       }
     }
 
@@ -331,15 +354,25 @@ Return ONLY the SQL query in JSON format:
     }
 
     // Step 5: Combine query results with auto-query results
+    // Prioritize user query results, but include auto-query results for context
     const allQueryResults = queryResults.length > 0 ? queryResults : autoQueryResults
     const allSQLQueries = [sqlQuery, autoQuerySQL].filter(Boolean).join('; ')
+    
+    // If we have pageData, merge it with query results for richer context
+    let enrichedResults = allQueryResults
+    if (pageData && typeof pageData === 'object' && allQueryResults.length === 0) {
+      // If no query results but we have page data, use page data as results
+      if (pageContext === 'properties' && pageData.properties) {
+        enrichedResults = pageData.properties
+      }
+    }
 
     // Step 6: Analyze results and generate insights
-    const hasData = allQueryResults.length > 0
+    const hasData = enrichedResults.length > 0
     const dataSummary = hasData 
-      ? `Here's the data from the database:
+      ? `Here's the data from the database and page:
 
-${JSON.stringify(allQueryResults, null, 2)}
+${JSON.stringify(enrichedResults, null, 2)}
 
 **SQL Query Used:** ${allSQLQueries || 'Auto-query based on page context'}
 

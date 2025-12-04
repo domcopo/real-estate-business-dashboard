@@ -36,6 +36,7 @@ import { Property } from "@/types"
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useUser } from "@clerk/nextjs"
 import Link from "next/link"
+import { usePageData } from "@/components/layout/page-data-context"
 import {
   PropertyField,
   PropertyFieldMapping,
@@ -147,11 +148,41 @@ type SortDirection = "asc" | "desc"
 
 export default function PropertiesPage() {
   const { user } = useUser()
+  const { setPageData } = usePageData()
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Share properties data with ELO AI
+  useEffect(() => {
+    if (properties.length > 0) {
+      setPageData({
+        properties: properties.map(p => ({
+          address: p.address,
+          type: p.type,
+          status: p.status,
+          purchasePrice: p.purchasePrice,
+          currentEstValue: p.currentEstValue,
+          monthlyMortgagePayment: p.monthlyMortgagePayment,
+          monthlyInsurance: p.monthlyInsurance,
+          monthlyPropertyTax: p.monthlyPropertyTax,
+          monthlyOtherCosts: p.monthlyOtherCosts,
+          monthlyGrossRent: p.monthlyGrossRent,
+          totalMortgageAmount: p.totalMortgageAmount,
+          mortgageHolder: p.mortgageHolder,
+          monthlyCashFlow: (p.monthlyGrossRent || 0) - (p.monthlyMortgagePayment || 0) - (p.monthlyInsurance || 0) - (p.monthlyPropertyTax || 0) - (p.monthlyOtherCosts || 0),
+        })),
+        totalProperties: properties.length,
+        rentedCount: properties.filter(p => p.status === 'rented').length,
+        vacantCount: properties.filter(p => p.status === 'vacant').length,
+      })
+    }
+    return () => {
+      setPageData(null)
+    }
+  }, [properties, setPageData])
 
   // Load properties from database on mount
   useEffect(() => {

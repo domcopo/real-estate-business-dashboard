@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { InvitationPrompt } from "@/components/team/invitation-prompt"
 import { EloAiButton } from "@/components/layout/elo-ai-button"
+import { PageDataProvider } from "@/components/layout/page-data-context"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -76,27 +77,29 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen relative">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpen={() => setSidebarOpen(true)} />
-      
-      <main className="flex-1 overflow-auto w-full lg:w-auto">
-        {children}
-      </main>
-      
-      {/* ELO AI Button - appears on every page */}
-      <EloAiButton />
-      
-      {/* Invitation Prompt - shows when user has pending invitations */}
-      <InvitationPrompt />
-    </div>
+    <PageDataProvider>
+      <div className="flex h-screen relative">
+        {/* Mobile overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpen={() => setSidebarOpen(true)} />
+        
+        <main className="flex-1 overflow-auto w-full lg:w-auto">
+          {children}
+        </main>
+        
+        {/* ELO AI Button - appears on every page */}
+        <EloAiButton />
+        
+        {/* Invitation Prompt - shows when user has pending invitations */}
+        <InvitationPrompt />
+      </div>
+    </PageDataProvider>
   )
 }
 
