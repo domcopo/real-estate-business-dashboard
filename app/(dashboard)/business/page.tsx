@@ -114,6 +114,14 @@ export default function BusinessPage() {
     },
   ])
 
+  const updateBusinessName = (businessId: string, name: string) => {
+    setBusinesses((prev) =>
+      prev.map((business) =>
+        business.id === businessId ? { ...business, name } : business
+      )
+    )
+  }
+
   const updateCampaign = (
     businessId: string,
     campaignId: string,
@@ -285,8 +293,13 @@ export default function BusinessPage() {
           <Card key={business.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl">{business.name}</CardTitle>
+                <div className="flex-1">
+                  <Input
+                    value={business.name}
+                    onChange={(e) => updateBusinessName(business.id, e.target.value)}
+                    className="text-xl font-semibold border-0 p-0 h-auto bg-transparent focus-visible:ring-1 focus-visible:ring-offset-0 mb-1"
+                    placeholder="Business Name"
+                  />
                   <CardDescription>
                     {business.campaigns.length} active campaign{business.campaigns.length !== 1 ? "s" : ""}
                   </CardDescription>
